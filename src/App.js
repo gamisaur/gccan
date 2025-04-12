@@ -34,7 +34,7 @@ export default function GCCAN() {
         style= {{backgroundImage: "url('/homeBG.jpg')" }}
       >
       <div className="flex flex-col items-center px-4 py-6 space-y-8">
-      <div className="flex justify-center w-full">
+      <div className="flex justify-center mt-12 w-full">
         <img
           src="/CCS logo.png"
           alt="Logo"
@@ -42,8 +42,8 @@ export default function GCCAN() {
         /> 
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-8 sm:mt-40 mt-32 px-4">
-          <div className="p-8 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-[400px] text-white">
+      <div className="flex flex-col sm:flex-row gap-8 sm:mt-40 mt-32 px-5">
+          <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-[500px] text-white">
             <img
               src="/CCS logo.png"
               alt="GCCAN Logo"
@@ -59,7 +59,7 @@ export default function GCCAN() {
             </button>
           </div>
   
-          <div className="p-8 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-[400px] text-white">
+          <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-[500px] text-white">
             <h2 className="text-2xl font-bold mb-4">About GCCAN</h2>
             <p className="text-white-700">
               GCCAN (Gordon College Chatbot Assistant and Navigation)
