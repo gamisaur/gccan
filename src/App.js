@@ -23,8 +23,15 @@ export default function GCCAN() {
     }
   };
 
+  const speakText = (text) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    speechSynthesis.speak(utterance);
+  }
+
   const handleClick = (question, answer) => {
     setMessages([...messages, { type: "user", text: question }, { type: "bot", text: answer }]);
+    speakText(answer);
   };
 
   if (!started) {
@@ -80,50 +87,54 @@ export default function GCCAN() {
 
   return (
     <div className="flex h-screen">
-      {/* Questions */}
-      <div className="w-1/3 p-4 bg-blue-50 border-r border-blue-200 overflow-y-auto">
-        <h1 className="text-xl font-bold mb-4">GCCAN</h1>
-        <p className="text-gray-600 mb-2">Select a category:</p>
-        <div className="flex flex-col gap-2">
-          {Object.keys(faqs).map((category) => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded text-white ${selectedCategory === category ? "bg-green-700" : "bg-green-500 hover:bg-green-600"}`}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-
-        {selectedCategory && (
-          <div className="mt-4">
-            <h2 className="text-lg font-semibold mb-2">{selectedCategory} Questions</h2>
-            {Object.entries(faqs[selectedCategory]).map(([question, answer]) => (
+      {/* Category and Questions Card */}
+      <div className="w-1/3 p-4">
+        <div className="p-6 bg-white rounded-lg shadow-lg shadow-gray-900/50">
+          <h1 className="text-xl font-bold mb-4">GCCAN</h1>
+          <p className="text-gray-600 mb-2">Select a category:</p>
+          <div className="flex flex-col gap-2">
+            {Object.keys(faqs).map((category) => (
               <button
-                key={question}
-                className="block w-full text-left p-2 bg-green-100 hover:bg-green-200 rounded-lg mb-2"
-                onClick={() => handleClick(question, answer)}
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`px-4 py-2 rounded text-white ${selectedCategory === category ? "bg-green-700" : "bg-green-500 hover:bg-green-600"}`}
               >
-                {question}
+                {category}
               </button>
             ))}
           </div>
-        )}
+
+          {selectedCategory && (
+            <div className="mt-4">
+              <h2 className="text-lg font-semibold mb-2">{selectedCategory} Questions</h2>
+              {Object.entries(faqs[selectedCategory]).map(([question, answer]) => (
+                <button
+                  key={question}
+                  className="block w-full text-left p-2 bg-green-100 hover:bg-green-200 rounded-lg mb-2"
+                  onClick={() => handleClick(question, answer)}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Chat Box */}
-      <div className="w-2/3 p-6 bg-white overflow-y-auto flex flex-col">
-        <h1 className="text-xl font-bold mb-4">Chat with GCCAN</h1>
-        <div className="flex-1 bg-gray-100 rounded-lg p-4 overflow-y-auto">
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`p-2 my-1 rounded-lg max-w-xs ${msg.type === "user" ? "bg-green-200 ml-auto text-right" : "bg-gray-200"}`}
-            >
-              <strong>{msg.type === "user" ? "You" : "GCCAN"}:</strong> {msg.text}
-            </div>
-          ))}
+      {/* Chat Box Card */}
+      <div className="w-full p-4">
+        <div className="p-6 bg-green-300 rounded-lg shadow-lg flex flex-col h-full">
+          <h1 className="text-xl font-bold mb-4">Chat with GCCAN</h1>
+          <div className="flex-1 bg-gray-100 rounded-lg p-4 overflow-y-auto">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`p-2 my-1 rounded-lg max-w-xs ${msg.type === "user" ? "bg-green-200 ml-auto text-right" : "bg-gray-200"}`}
+              >
+                <strong>{msg.type === "user" ? "You" : "GCCAN"}:</strong> {msg.text}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
