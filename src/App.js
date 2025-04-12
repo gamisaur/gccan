@@ -123,7 +123,7 @@ export default function GCCAN() {
 
       {/* Chat Box Card */}
       <div className="lg:w-2/3 w-full p-4">
-        <div className="p-6 bg-green-300 rounded-lg shadow-lg flex flex-col h-full">
+        <div className="p-6 bg-green-300 rounded-lg shadow-lg flex flex-col h-full max-h-[90vh]">
           <h1 className="text-xl font-bold mb-4">Chat with GCCAN</h1>
           <div className="flex-1 bg-gray-100 rounded-lg p-4 overflow-y-auto">
             {messages.map((msg, index) => (
