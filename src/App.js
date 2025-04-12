@@ -67,9 +67,9 @@ export default function GCCAN() {
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 w-full bg-gray-100/30 backdrop-blur-md py-1 text-center text-sm text-white">
+        <div className="fixed bottom-0 left-0 w-full bg-gray-100/20 backdrop-blur-md py-1 text-center text-sm text-white">
           <p>
-          ✉️ Email us at <span className="font-semibold">info@gordoncollege.edu.ph</span> | 📍 Olongapo City Sports Complex, Donor Street, East Tapinac, Olongapo City 2200
+          ✉️ Email us at <span className="font-semibold">info@gordoncollege.edu.ph</span>
           </p>
         </div>
       </div>
