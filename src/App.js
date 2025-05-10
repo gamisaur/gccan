@@ -108,18 +108,35 @@ export default function App() {
         <div className="p-6 bg-white rounded-lg shadow-lg shadow-gray-900/50">
           <h1 className="text-xl font-bold mb-4">GCCAN</h1>
           <div className="flex justify-between items-center mb-4">
-            <p className="text-gray-600">Text-to-Speech:</p>
-            <label className="inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={ttsEnabled}
-                onChange={() => setTtsEnabled(!ttsEnabled)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-green-500 transition-all duration-300"></div>
-              <div className="w-5 h-5 bg-white rounded-full absolute ml-1 mt-0.5 transition-transform duration-300 peer-checked:translate-x-5"></div>
-            </label>
-          </div>
+  <p className="text-gray-600">Text-to-Speech:</p>
+  <label className="relative inline-flex items-center cursor-pointer">
+    <input
+      type="checkbox"
+      checked={ttsEnabled}
+      onChange={() => {
+        if (ttsEnabled) {
+          speechSynthesis.cancel();
+        }
+        setTtsEnabled(!ttsEnabled);
+      }}
+      className="sr-only peer"
+    />
+    <div className="w-14 h-7 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-all duration-300 relative">
+      {/* OFF on the right when ttsEnabled is false */}
+      <span className={`absolute right-1 top-1 text-xs font-bold transition-all duration-300 ${ttsEnabled ? 'opacity-0' : 'opacity-100'}`}>
+        OFF
+      </span>
+      {/* ON on the left when ttsEnabled is true */}
+      <span className={`absolute left-1 top-1 text-xs font-bold text-white transition-all duration-300 ${ttsEnabled ? 'opacity-100' : 'opacity-0'}`}>
+        ON
+      </span>
+    </div>
+    <div className="absolute left-1 top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 peer-checked:translate-x-7"></div>
+  </label>
+</div>
+
+
+
           <p className="text-gray-600 mb-2">Select a category:</p>
           <div className="flex flex-col gap-2">
             {Object.keys(faqs).map((category) => (
