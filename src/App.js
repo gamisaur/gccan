@@ -9,30 +9,34 @@ export default function App() {
   const [faqs, setFaqs] = useState({});
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const chatEndRef = useRef(null);
+  const messageRef = useRef(null);
 
   const speakText = (htmlText) => {
   if (!ttsEnabled) return;
+
+  speechSynthesis.cancel();
+
   const doc = new DOMParser().parseFromString(htmlText, "text/html");
-  const text = doc.body.innerText; // Better than textContent for formatting
+  const text = doc.body.innerText;
+
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-US";
   speechSynthesis.speak(utterance);
 };
 
 
-
   const handleClick = (question, answer) => {
-  const linkedAnswer = linkify(answer); // apply linkify first
-  const plainText = new DOMParser().parseFromString(linkedAnswer, "text/html").body.innerText || "";
-
+  const linkedAnswer = linkify(answer);
+  
   setMessages((prev) => [
     ...prev,
     { type: "user", text: question },
-    { type: "bot", text: answer },
+    { type: "bot", text: linkedAnswer },
   ]);
 
-  speakText(plainText); // now it reads the visible display
-};
+  speakText(linkedAnswer);
+  };
+
 
   const fetchFAQs = async () => {
     const snapshot = await getDocs(collection(db, "FAQs"));
@@ -46,30 +50,38 @@ export default function App() {
   };
 
   const linkify = (text) => {
-  text = text.replace(
-    /https:\/\/gordoncollege\.edu\.ph\/gca\/student\/#\/login/g,
-    `<a href="https://gordoncollege.edu.ph/gca/student/#/login" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">portal login page</a>`
-  );
-  text = text.replace(
-    /https:\/\/gordoncollege\.edu\.ph\/gca\/student(?!\/#\/login)/g,
-    `<a href="https://gordoncollege.edu.ph/gca/student" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">Gordon College Admission Portal signup page</a>`
-  );
+    text = text.replace(
+      /https:\/\/gordoncollege\.edu\.ph\/gca\/student\/#\/login/g,
+      `<a href="https://gordoncollege.edu.ph/gca/student/#/login" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">portal login page</a>`
+    );
+    text = text.replace(
+      /https:\/\/gordoncollege\.edu\.ph\/gca\/student(?!\/#\/login)/g,
+      `<a href="https://gordoncollege.edu.ph/gca/student" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">Gordon College Admission Portal signup page</a>`
+    );
 
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return text.replace(urlRegex, (url) => {
-    if (text.includes(`href="${url}`)) return url;
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline break-words">${url}</a>`;
-  });
-};
-
+    const urlRegex = /(https?:\/\/[^\s<]+)/g;
+    return text.replace(urlRegex, (url) => {
+      if (text.includes(`href="${url}`)) return url;
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline break-words">${url}</a>`;
+    });
+  };
 
   useEffect(() => {
     fetchFAQs();
   }, []);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messageRef.current) {
+      messageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }, [messages]);
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && ttsEnabled && lastMessage.type === "bot") {
+      speakText(lastMessage.text);
+    }
+  }, [messages, ttsEnabled]);
 
   if (!started) {
     return (
@@ -126,31 +138,35 @@ export default function App() {
       <div className="w-full sm:w-1/3 p-4">
         <div className="p-6 bg-white rounded-lg shadow-lg shadow-gray-900/50">
           <h1 className="text-xl font-bold mb-4">GCCAN</h1>
-          <div className="flex justify-between items-center mb-4">
-          <p className="text-gray-600">Text-to-Speech:</p>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={ttsEnabled}
-                onChange={() => {
-                if (ttsEnabled) {
-                  speechSynthesis.cancel();
-              }
-                setTtsEnabled(!ttsEnabled);
-              }}
-              className="sr-only peer"
-              />
-              <div className="w-14 h-7 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-all duration-300 relative">
-                <span className={`absolute left-1 top-1 text-xs font-bold text-white transition-all duration-300 ${ttsEnabled ? 'opacity-100' : 'opacity-0'}`}>
-                  ON
-                </span>
-                <span className={`absolute right-1 top-1 text-xs font-bold transition-all duration-300 ${ttsEnabled ? 'opacity-0' : 'opacity-100'}`}>
-                  OFF
-                </span>
+            <div className="flex justify-between items-center mb-4">
+              <p className="text-gray-600">Text-to-Speech:</p>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ttsEnabled}
+                  onChange={() => {
+                    if (ttsEnabled) {
+                      speechSynthesis.cancel(); 
+                    }
+                    setTtsEnabled(!ttsEnabled);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-all duration-300 relative">
+                  <span
+                    className={`absolute left-1 top-1 text-xs font-bold text-white transition-all duration-300 ${ttsEnabled ? 'opacity-100' : 'opacity-0'}`}
+                  >
+                    ON
+                  </span>
+                  <span
+                    className={`absolute right-1 top-1 text-xs font-bold text-white transition-all duration-300 ${ttsEnabled ? 'opacity-0' : 'opacity-100'}`}
+                  >
+                    OFF
+                  </span>
+                </div>
+                <div className={`absolute left-1 top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ${ttsEnabled ? 'translate-x-7' : ''}`}></div>
+              </label>
             </div>
-          <div className="absolute left-1 top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 peer-checked:translate-x-7"></div>
-          </label>
-          </div>
 
           <p className="text-gray-600 mb-2">Select a category:</p>
           <div className="flex flex-col gap-2">
@@ -198,17 +214,16 @@ export default function App() {
             {messages.map((msg, index) => (
               <div
                 key={index}
+                ref={index === messages.length - 1 ? messageRef : null} // Only add ref to the last message
                 className={`p-2 my-1 rounded-lg max-w-xs break-words whitespace-pre-line ${
-                  msg.type === "user"
-                    ? "bg-green-200 ml-auto text-right"
-                    : "bg-gray-200"
+                  msg.type === "user" ? "bg-green-200 ml-auto text-right" : "bg-gray-200"
                 }`}
               >
                 <strong>{msg.type === "user" ? "You" : "GCCAN"}:</strong>{" "}
                 {msg.type === "bot" ? (
                   <span
                     className="break-words whitespace-pre-line"
-                    dangerouslySetInnerHTML={{ __html: linkify(msg.text) }}
+                    dangerouslySetInnerHTML={{ __html: msg.text }}
                   />
                 ) : (
                   msg.text
