@@ -104,7 +104,7 @@ export default function App() {
             <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
               <h2 className="text-2xl font-bold mb-4">About GCCAN</h2>
               <p className="text-white-700">
-                GCCAN (Gordon College Chatbot Assistant and Navigation)
+                GCCAN Gordon College Chatbot Assistant and Navigation (GCCAN) is a web-based platform designed to guide students through enrollment, answer frequently asked questions, and assist with navigating college services—offering quick, reliable support anytime.
               </p>
             </div>
           </div>
