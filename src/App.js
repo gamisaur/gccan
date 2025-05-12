@@ -211,14 +211,14 @@ export default function App() {
       </div>
 
       {/* Chat */}
-      <div className="w-full sm:w-2/3 p-4 flex-grow overflow-y-auto min-h-[60vh] sm:min-h-0">
+      <div className="w-full sm:w-2/3 p-4 flex-grow overflow-y-auto min-h-[90vh] sm:min-h-0 text-base sm:text-sm">
         <div className="p-6 bg-green-300 rounded-lg shadow-lg flex flex-col h-full max-h-[90vh]">
           <h1 className="text-xl font-bold mb-4">Chat with GCCAN</h1>
           <div className="flex-1 bg-gray-100 rounded-lg p-4 overflow-y-auto">
             {messages.map((msg, index) => (
               <div
                 key={index}
-                ref={index === messages.length - 1 ? messageRef : null} // Only add ref to the last message
+                ref={index === messages.length - 1 ? messageRef : null}
                 className={`p-2 my-1 rounded-lg max-w-xs break-words whitespace-pre-line ${
                   msg.type === "user" ? "bg-green-200 ml-auto text-right" : "bg-gray-200"
                 }`}
