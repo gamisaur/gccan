@@ -7,24 +7,32 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [faqs, setFaqs] = useState({});
-  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
   const chatEndRef = useRef(null);
 
-  const speakText = (text) => {
-    if (!ttsEnabled) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    speechSynthesis.speak(utterance);
-  };
+  const speakText = (htmlText) => {
+  if (!ttsEnabled) return;
+  const doc = new DOMParser().parseFromString(htmlText, "text/html");
+  const text = doc.body.innerText; // Better than textContent for formatting
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  speechSynthesis.speak(utterance);
+};
+
+
 
   const handleClick = (question, answer) => {
-    setMessages((prev) => [
-      ...prev,
-      { type: "user", text: question },
-      { type: "bot", text: answer },
-    ]);
-    speakText(answer);
-  };
+  const linkedAnswer = linkify(answer); // apply linkify first
+  const plainText = new DOMParser().parseFromString(linkedAnswer, "text/html").body.innerText || "";
+
+  setMessages((prev) => [
+    ...prev,
+    { type: "user", text: question },
+    { type: "bot", text: answer },
+  ]);
+
+  speakText(plainText); // now it reads the visible display
+};
 
   const fetchFAQs = async () => {
     const snapshot = await getDocs(collection(db, "FAQs"));
@@ -38,11 +46,22 @@ export default function App() {
   };
 
   const linkify = (text) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, (url) => {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">${url}</a>`;
-    });
-  };
+  text = text.replace(
+    /https:\/\/gordoncollege\.edu\.ph\/gca\/student\/#\/login/g,
+    `<a href="https://gordoncollege.edu.ph/gca/student/#/login" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">portal login page</a>`
+  );
+  text = text.replace(
+    /https:\/\/gordoncollege\.edu\.ph\/gca\/student(?!\/#\/login)/g,
+    `<a href="https://gordoncollege.edu.ph/gca/student" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline">Gordon College Admission Portal signup page</a>`
+  );
+
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  return text.replace(urlRegex, (url) => {
+    if (text.includes(`href="${url}`)) return url;
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline break-words">${url}</a>`;
+  });
+};
+
 
   useEffect(() => {
     fetchFAQs();
@@ -122,11 +141,11 @@ export default function App() {
               className="sr-only peer"
               />
               <div className="w-14 h-7 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-all duration-300 relative">
-                <span className={`absolute right-1 top-1 text-xs font-bold transition-all duration-300 ${ttsEnabled ? 'opacity-0' : 'opacity-100'}`}>
-                  OFF
-                </span>
                 <span className={`absolute left-1 top-1 text-xs font-bold text-white transition-all duration-300 ${ttsEnabled ? 'opacity-100' : 'opacity-0'}`}>
                   ON
+                </span>
+                <span className={`absolute right-1 top-1 text-xs font-bold transition-all duration-300 ${ttsEnabled ? 'opacity-0' : 'opacity-100'}`}>
+                  OFF
                 </span>
             </div>
           <div className="absolute left-1 top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 peer-checked:translate-x-7"></div>
@@ -179,7 +198,7 @@ export default function App() {
             {messages.map((msg, index) => (
               <div
                 key={index}
-                className={`p-2 my-1 rounded-lg max-w-xs ${
+                className={`p-2 my-1 rounded-lg max-w-xs break-words whitespace-pre-line ${
                   msg.type === "user"
                     ? "bg-green-200 ml-auto text-right"
                     : "bg-gray-200"
@@ -188,7 +207,7 @@ export default function App() {
                 <strong>{msg.type === "user" ? "You" : "GCCAN"}:</strong>{" "}
                 {msg.type === "bot" ? (
                   <span
-                    className="whitespace-pre-line"
+                    className="break-words whitespace-pre-line"
                     dangerouslySetInnerHTML={{ __html: linkify(msg.text) }}
                   />
                 ) : (
