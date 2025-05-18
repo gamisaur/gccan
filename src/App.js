@@ -264,8 +264,8 @@ export default function App() {
         <div className="relative p-6 bg-green-300 rounded-lg shadow-lg flex flex-col h-full max-h-[90vh] overflow-hidden">
             {/* Background image layer */}
             <div
-              className="absolute inset-0 bg-center bg-cover opacity-5 z-0"
-              style={{ backgroundImage: "url('/GC logo.png')" }}
+              className="absolute inset-0 bg-center bg-cover z-0"
+              style={{ backgroundImage: "url('/GC logo.png')", opacity: 0.03 }}
             ></div>
           <h1 className="text-xl font-bold mb-4">Chat with GCCAN</h1>
           <div className="flex-1 bg-gray-100 rounded-lg p-4 overflow-y-auto">
