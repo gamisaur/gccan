@@ -1,4 +1,3 @@
-// src/AdminDashboard.js
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -26,15 +25,25 @@ export default function AdminDashboard({ user, onLogout }) {
   }, []);
 
   const handleAdd = async () => {
-    if (!formData.category || !formData.question || !formData.answer) return;
+  if (!formData.category || !formData.question || !formData.answer) return;
+
+  const confirmed = window.confirm(
+    `Add new FAQ?\n\nCategory: ${formData.category}\nQuestion: ${formData.question}\nAnswer: ${formData.answer}`
+    );
+
+    if (!confirmed) return;
+
     await addDoc(collection(db, "FAQs"), formData);
     setFormData({ category: "", question: "", answer: "" });
     fetchFAQs();
-  };
+    };
 
-  const handleDelete = async (id) => {
-    await deleteDoc(doc(db, "FAQs", id));
-    fetchFAQs();
+  const handleDelete = async (id, question) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete the question: "${question}"?`);
+    if (confirmDelete) {
+      await deleteDoc(doc(db, "FAQs", id));
+      fetchFAQs();
+    }
   };
 
   const handleUpdate = async (id) => {
@@ -48,7 +57,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const handleLogout = async () => {
     const auth = getAuth();
     await signOut(auth);
-    onLogout(); // Tell App.js to reset admin state
+    onLogout();
   };
 
   return (
@@ -63,7 +72,6 @@ export default function AdminDashboard({ user, onLogout }) {
         </button>
       </div>
 
-      {/* Add Form */}
       <div className="bg-white p-4 rounded shadow mb-6">
         <h2 className="text-xl font-semibold mb-2">Add New FAQ</h2>
         <input
@@ -94,7 +102,6 @@ export default function AdminDashboard({ user, onLogout }) {
         </button>
       </div>
 
-      {/* FAQ List */}
       <div className="bg-white p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">Existing FAQs</h2>
         {faqs.map((faq) => (
@@ -110,7 +117,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 Edit
               </button>
               <button
-                onClick={() => handleDelete(faq.id)}
+                onClick={() => handleDelete(faq.id, faq.question)}
                 className="text-red-600 hover:underline"
               >
                 Delete
