@@ -15,6 +15,9 @@ export default function App() {
   const [view, setView] = useState("user");
   const chatEndRef = useRef(null);
   const messageRef = useRef(null);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+
 
   useEffect(() => {
     const auth = getAuth();
@@ -367,17 +370,76 @@ export default function App() {
             </button>
           </div>
           {selectedCategory && (
-            <div className="mt-4">
-              <h2 className="text-lg font-semibold mb-2">{selectedCategory} Questions</h2>
-              {Object.entries(faqs[selectedCategory]).map(([question, answer]) => (
+          <div className="mt-4">
+            {Object.entries(faqs[selectedCategory]).map(([question, answer]) => (
+              <div key={question} className="mb-2">
                 <button
-                  key={question}
-                  className="block w-full text-left p-2 bg-green-100 hover:bg-green-200 rounded-lg mb-2"
                   onClick={() => handleClick(question, answer)}
+                  className="text-left w-full px-2 py-1 rounded bg-green-200 hover:bg-green-300"
                 >
                   {question}
                 </button>
-              ))}
+              </div>
+            ))}
+          </div>
+        )}
+        
+          <button
+            onClick={() => setShowFeedbackForm(prev => !prev)}
+            className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-700 mt-2 w-full"
+          >
+            Submit Feedback/Questions
+          </button>
+
+          <div className="flex-grow" />
+
+          {showFeedbackForm && (  
+            <div className="p-4 bg-white rounded shadow mt-auto">
+              {/* feedback form content */}
+              <h3 className="font-semibold mb-2">Submit Feedback/Question</h3>
+              <textarea
+                className="w-full p-2 border rounded mb-2"
+                rows={4}
+                placeholder="Type your feedback or question here..."
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                  onClick={() => {
+                    setShowFeedbackForm(false);
+                    setFeedbackText("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-700"
+                  onClick={async () => {
+                    if (!feedbackText.trim()) {
+                      alert("Please enter your feedback before submitting.");
+                      return;
+                    }
+                    try {
+                      await import("firebase/firestore").then(async ({ collection, addDoc }) => {
+                        await addDoc(collection(db, "Feedback"), {
+                          feedback: feedbackText.trim(),
+                          timestamp: new Date(),
+                        });
+                      });
+                      alert("Thank you for your feedback!");
+                      setFeedbackText("");
+                      setShowFeedbackForm(false);
+                    } catch (err) {
+                      alert("Failed to submit feedback. Please try again.");
+                      console.error(err);
+                    }
+                  }}
+                >
+                  Submit
+                </button>
+              </div>
             </div>
           )}
         </div>

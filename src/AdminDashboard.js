@@ -31,6 +31,9 @@ export default function AdminDashboard({ user, onLogout }) {
     time: "",
   });
 
+  //Feedback states
+  const[feedbackList, setFeedbackList] = useState([]);
+
   // Fetch FAQs
   const fetchFAQs = async () => {
     const snapshot = await getDocs(collection(db, "FAQs"));
@@ -61,9 +64,25 @@ export default function AdminDashboard({ user, onLogout }) {
     setSchedules(schedulesData);
   };
 
+  // Fetch Feedbacks
+    const fetchFeedback = async () => {
+    try {
+      const feedbackRef = collection(db, "Feedback");
+      const snapshot = await getDocs(feedbackRef);
+      const feedbackData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setFeedbackList(feedbackData); 
+    } catch (error) {
+      console.error("Error fetching feedback:", error);
+    }
+  };
+
   useEffect(() => {
     fetchFAQs();
     fetchSchedules();
+    fetchFeedback();
   }, []);
 
   // FAQ handlers
@@ -179,6 +198,26 @@ export default function AdminDashboard({ user, onLogout }) {
     onLogout();
   };
 
+  const handleDeleteFeedback = async (id) => {
+    const confirmDelete = window.confirm("Delete this feedback message?");
+    if (confirmDelete) {
+      await deleteDoc(doc(db, "Feedback", id));
+      fetchFeedback();
+    }
+  };
+
+  const handleMarkAsResolved = async (id) => {
+  try {
+    await updateDoc(doc(db, "Feedback", id), {
+      resolved: true,
+    });
+    fetchFeedback(); // Refresh feedback list
+  } catch (error) {
+    console.error("Error marking as resolved:", error);
+    alert("Failed to mark as resolved.");
+  }
+};
+
   return (
     <div className="p-8 bg-gray-100 min-h-screen">
       <div className="flex justify-between items-center mb-6">
@@ -204,6 +243,12 @@ export default function AdminDashboard({ user, onLogout }) {
           className={`px-4 py-2 rounded ${view === "schedules" ? "bg-green-500 text-white" : "bg-gray-300"}`}
         >
           Manage Faculty Schedules
+        </button>
+        <button
+          onClick={() => setView("feedback")}
+          className={`px-4 py-2 rounded ${view === "feedback" ? "bg-green-500 text-white" : "bg-gray-300"}`}
+        >
+          View Feedback & Questions
         </button>
       </div>
 
@@ -373,6 +418,41 @@ export default function AdminDashboard({ user, onLogout }) {
           </div>
         </>
       )}
+      {/* Feedback Section */}
+        {view === "feedback" && (
+          <div className="bg-white p-4 rounded shadow">
+            <h2 className="text-xl font-semibold mb-4">User Feedback / Questions</h2>
+
+            {feedbackList.length === 0 ? (
+              <p>No feedback submitted yet.</p>
+            ) : (
+              feedbackList.map((feedback) => (
+                <div key={feedback.id} className="border-b py-3">
+                  <p><strong>Message:</strong> {feedback.feedback}</p>
+                  <p className="text-sm text-gray-500">
+                    Status: {feedback.resolved ? "Resolved " : "Unresolved "}
+                    {feedback.timestamp?.toDate().toLocaleString() || "No timestamp"}
+                  </p>
+                  <div className="mt-2 flex gap-4">
+                    <button
+                      onClick={() => handleDeleteFeedback(feedback.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                    {/* Optional: Add mark as resolved */}
+                    <button
+                      onClick={() => handleMarkAsResolved(feedback.id)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Mark as Resolved
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
     </div>
   );
 }
