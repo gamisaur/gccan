@@ -83,7 +83,7 @@ export default function App() {
         <option value="">Select Faculty</option>
         ${optionsHTML}
       </select>
-      <button class="bg-green-500 text-white px-3 py-1 rounded-md hover:bg-green-600">
+      <button id="show-schedule-btn" class="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-700">
         Select
       </button>
       <div id="faculty-schedule-table" class="mt-4"></div>
