@@ -12,7 +12,7 @@ export default function App() {
   const [faqs, setFaqs] = useState({});
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState("user"); // 'user' | 'admin' | 'adminLogin'
+  const [view, setView] = useState("user");
   const chatEndRef = useRef(null);
   const messageRef = useRef(null);
 
@@ -49,6 +49,127 @@ export default function App() {
     ]);
     speakText(linkedAnswer);
   };
+
+  const handleCheckAvailability = async () => {
+  try {
+    const schedulesSnapshot = await getDocs(collection(db, "FacultySchedules"));
+    if (schedulesSnapshot.empty) {
+      setMessages((prev) => [
+        ...prev,
+        { type: "bot", text: "No faculty schedules found." },
+      ]);
+      return;
+    }
+
+    // Prepare faculty options: array of { name, email }
+    const faculties = schedulesSnapshot.docs.map(doc => {
+      const { facultyName } = doc.data();
+      return { facultyName, facultyEmail: doc.id };
+    });
+
+    // Build dropdown HTML for faculty selection
+    const optionsHTML = faculties
+      .map(
+        ({ facultyName, facultyEmail }) =>
+          `<option value="${facultyEmail}">${facultyName}</option>`
+      )
+      .join("");
+
+    const dropdownHTML = `
+      <p class="mb-4 text-gray-700">
+        Select a faculty to view their schedule:
+      </p>
+      <select id="faculty-select" class="border border-gray-400 rounded p-2 w-full mb-2">
+        <option value="">Select Faculty</option>
+        ${optionsHTML}
+      </select>
+      <button class="bg-green-500 text-white px-3 py-1 rounded-md hover:bg-green-600">
+        Select
+      </button>
+      <div id="faculty-schedule-table" class="mt-4"></div>
+    `;
+
+    setMessages((prev) => [...prev, { type: "bot", text: dropdownHTML }]);
+
+    // Wait for DOM update then attach event listener to the button
+    setTimeout(() => {
+      const selectElem = document.getElementById("faculty-select");
+      const btn = document.getElementById("show-schedule-btn");
+      const tableContainer = document.getElementById("faculty-schedule-table");
+
+      if (!selectElem || !btn || !tableContainer) return;
+
+      btn.onclick = async () => {
+        const selectedEmail = selectElem.value;
+        if (!selectedEmail) {
+          alert("Please select a faculty.");
+          return;
+        }
+
+        try {
+          const facultyDoc = await getDocs(collection(db, `FacultySchedules/${selectedEmail}/subjects`));
+          const facultyDataDoc = schedulesSnapshot.docs.find(doc => doc.id === selectedEmail);
+          const facultyName = facultyDataDoc?.data()?.facultyName || "";
+
+          if (facultyDoc.empty) {
+            tableContainer.innerHTML = `<p class="text-red-600">No schedule found for this faculty.</p>`;
+            return;
+          }
+
+          // Build schedule rows
+          const rows = facultyDoc.docs.map(subDoc => {
+            const data = subDoc.data();
+            const available = data.classType === "Face-to-face" ? "Available" : "Not Available";
+            return `
+              <tr class="border border-gray-300 even:bg-green-50 odd:bg-white">
+                <td class="p-2 border border-gray-300">${facultyName}</td>
+                <td class="p-2 border border-gray-300">${data.courseCode}</td>
+                <td class="p-2 border border-gray-300">${data.classCode}</td>
+                <td class="p-2 border border-gray-300">${data.courseDescription}</td>
+                <td class="p-2 border border-gray-300">${data.classType}</td>
+                <td class="p-2 border border-gray-300">${data.day}</td>
+                <td class="p-2 border border-gray-300">${data.time}</td>
+                <td class="p-2 border border-gray-300 font-semibold text-center ${
+                  available === "Available" ? "text-green-700" : "text-red-600"
+                }">${available}</td>
+                <td class="p-2 border border-gray-300">${selectedEmail}</td>
+              </tr>
+            `;
+          }).join("");
+
+          tableContainer.innerHTML = `
+            <div class="overflow-auto max-h-[400px] border border-gray-400 rounded">
+              <table class="table-auto w-full text-sm border-collapse border border-gray-400">
+                <thead class="bg-green-600 text-white sticky top-0">
+                  <tr>
+                    <th class="p-2 border">Name</th>
+                    <th class="p-2 border">Course Code</th>
+                    <th class="p-2 border">Class Code</th>
+                    <th class="p-2 border">Description</th>
+                    <th class="p-2 border">Class Type</th>
+                    <th class="p-2 border">Day</th>
+                    <th class="p-2 border">Time</th>
+                    <th class="p-2 border">Status</th>
+                    <th class="p-2 border">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (err) {
+          console.error(err);
+          tableContainer.innerHTML = `<p class="text-red-600">Error loading schedule.</p>`;
+        }
+      };
+    }, 100);
+  } catch (error) {
+    console.error("Error fetching schedules:", error);
+    setMessages((prev) => [...prev, { type: "bot", text: "Error fetching schedules." }]);
+  }
+};
 
   const fetchFAQs = async () => {
     const snapshot = await getDocs(collection(db, "FAQs"));
@@ -94,32 +215,28 @@ export default function App() {
     }
   }, [messages, ttsEnabled]);
 
-  // Render Admin View
   if (view === "admin") {
-    return (
-      isAdmin ? (
-        <AdminDashboard
-          onLogout={() => {
-            const auth = getAuth();
-            signOut(auth).then(() => {
-              setIsAdmin(false);
-              setView("user");
-            });
-          }}
-        />
-      ) : (
-        <AdminLogin
-          onLogin={() => {
-            setIsAdmin(true);
-            setView("admin");
-          }}
-          onBack={() => setView("user")}
-        />
-      )
+    return isAdmin ? (
+      <AdminDashboard
+        onLogout={() => {
+          const auth = getAuth();
+          signOut(auth).then(() => {
+            setIsAdmin(false);
+            setView("user");
+          });
+        }}
+      />
+    ) : (
+      <AdminLogin
+        onLogin={() => {
+          setIsAdmin(true);
+          setView("admin");
+        }}
+        onBack={() => setView("user")}
+      />
     );
   }
 
-  // Welcome Page
   if (!started) {
     return (
       <div
@@ -185,7 +302,7 @@ export default function App() {
           <div className="flex items-center mb-4">
           <button
             onClick={() => {
-              setStarted(false);      // Go back to welcome screen
+              setStarted(false);
               setMessages([]);
               setSelectedCategory(null);
             }}
@@ -241,8 +358,14 @@ export default function App() {
                 {category}
               </button>
             ))}
-          </div>
 
+            <button
+              onClick={handleCheckAvailability}
+              className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-700"
+            >
+              Check Availability
+            </button>
+          </div>
           {selectedCategory && (
             <div className="mt-4">
               <h2 className="text-lg font-semibold mb-2">{selectedCategory} Questions</h2>
@@ -262,9 +385,8 @@ export default function App() {
 
       <div className="w-full sm:w-2/3 p-4 flex-grow overflow-y-auto min-h-[95vh] text-base sm:text-sm">
         <div className="relative p-6 bg-green-300 rounded-lg shadow-lg flex flex-col h-full max-h-[90vh] overflow-hidden">
-            {/* Background image layer */}
             <div
-              className="absolute inset-0 bg-center bg-cover z-0"
+              className="absolute inset-0 bg-center bg-cover z-0 pointer-events-none"
               style={{ backgroundImage: "url('/GC logo.png')", opacity: 0.03 }}
             ></div>
           <h1 className="text-xl font-bold mb-4">Chat with GCCAN</h1>
