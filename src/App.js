@@ -17,6 +17,7 @@ export default function App() {
   const messageRef = useRef(null);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
+  const [lastSelectedFacultyName, setLastSelectedFacultyName] = useState(null);
 
 
   useEffect(() => {
@@ -86,9 +87,6 @@ export default function App() {
         <option value="">Select Faculty</option>
         ${optionsHTML}
       </select>
-      <button id="show-schedule-btn" class="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-700">
-        Select
-      </button>
       <div id="faculty-schedule-table" class="mt-4"></div>
     `;
 
@@ -96,23 +94,23 @@ export default function App() {
 
     // Wait for DOM update then attach event listener to the button
     setTimeout(() => {
-      const selectElem = document.getElementById("faculty-select");
-      const btn = document.getElementById("show-schedule-btn");
-      const tableContainer = document.getElementById("faculty-schedule-table");
+  const selectElem = document.getElementById("faculty-select");
+  const tableContainer = document.getElementById("faculty-schedule-table");
 
-      if (!selectElem || !btn || !tableContainer) return;
+  if (!selectElem || !tableContainer) return;
 
-      btn.onclick = async () => {
-        const selectedEmail = selectElem.value;
-        if (!selectedEmail) {
-          alert("Please select a faculty.");
-          return;
-        }
+  selectElem.addEventListener("change", async () => {
+    const selectedEmail = selectElem.value;
 
-        try {
-          const facultyDoc = await getDocs(collection(db, `FacultySchedules/${selectedEmail}/subjects`));
-          const facultyDataDoc = schedulesSnapshot.docs.find(doc => doc.id === selectedEmail);
-          const facultyName = facultyDataDoc?.data()?.facultyName || "";
+    if (!selectedEmail) {
+      tableContainer.innerHTML = "";  // Clear schedule if no selection
+      return;
+    }
+
+    try {
+      const facultyDoc = await getDocs(collection(db, `FacultySchedules/${selectedEmail}/subjects`));
+      const facultyDataDoc = schedulesSnapshot.docs.find(doc => doc.id === selectedEmail);
+      const facultyName = facultyDataDoc?.data()?.facultyName || "";
 
           if (facultyDoc.empty) {
             tableContainer.innerHTML = `<p class="text-red-600">No schedule found for this faculty.</p>`;
@@ -166,7 +164,7 @@ export default function App() {
           console.error(err);
           tableContainer.innerHTML = `<p class="text-red-600">Error loading schedule.</p>`;
         }
-      };
+      });
     }, 100);
   } catch (error) {
     console.error("Error fetching schedules:", error);
@@ -353,13 +351,29 @@ export default function App() {
           <p className="text-gray-600 mb-2">Select a category:</p>
           <div className="flex flex-col gap-2">
             {Object.keys(faqs).map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
-                className={`px-4 py-2 rounded text-white ${selectedCategory === category ? "bg-green-700" : "bg-green-500 hover:bg-green-600"}`}
-              >
-                {category}
-              </button>
+              <div key={category}>
+                <button
+                  onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
+                  className={`px-4 py-2 rounded text-white ${selectedCategory === category ? "bg-green-700 w-full" : "bg-green-500 hover:bg-green-600 w-full"}`}
+                >
+                  {category}
+                </button>
+
+                {selectedCategory === category && (
+                  <div className="mt-2">
+                    {Object.entries(faqs[category]).map(([question, answer]) => (
+                      <div key={question} className="mb-2">
+                        <button
+                          onClick={() => handleClick(question, answer)}
+                          className="text-left w-full px-2 py-1 rounded bg-green-200 hover:bg-green-300"
+                        >
+                          {question}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
 
             <button
@@ -369,27 +383,14 @@ export default function App() {
               Check Availability
             </button>
           </div>
-          {selectedCategory && (
-          <div className="mt-4">
-            {Object.entries(faqs[selectedCategory]).map(([question, answer]) => (
-              <div key={question} className="mb-2">
-                <button
-                  onClick={() => handleClick(question, answer)}
-                  className="text-left w-full px-2 py-1 rounded bg-green-200 hover:bg-green-300"
-                >
-                  {question}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        
+
           <button
             onClick={() => setShowFeedbackForm(prev => !prev)}
             className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-700 mt-2 w-full"
           >
             Submit Feedback/Questions
           </button>
+
 
           <div className="flex-grow" />
 
