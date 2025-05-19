@@ -17,8 +17,10 @@ export default function App() {
   const messageRef = useRef(null);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
-  const [lastSelectedFacultyName, setLastSelectedFacultyName] = useState(null);
-
+  const [facultyList, setFacultyList] = useState([]);
+  const [selectedFaculty, setSelectedFaculty] = useState("");
+  const [facultySchedule, setFacultySchedule] = useState([]);
+  const [showAvailability, setShowAvailability] = useState(false);
 
   useEffect(() => {
     const auth = getAuth();
@@ -45,6 +47,7 @@ export default function App() {
   };
 
   const handleClick = (question, answer) => {
+    setShowAvailability(false);
     const linkedAnswer = linkify(answer);
     setMessages((prev) => [
       ...prev,
@@ -54,123 +57,54 @@ export default function App() {
     speakText(linkedAnswer);
   };
 
+
   const handleCheckAvailability = async () => {
-  try {
-    const schedulesSnapshot = await getDocs(collection(db, "FacultySchedules"));
-    if (schedulesSnapshot.empty) {
+    setShowAvailability(true);
+    setMessages((prev) => [
+      ...prev,
+      { type: "bot", text: "Please select a faculty to view their schedule." },
+    ]);
+    setSelectedFaculty("");
+    setFacultySchedule([]);
+    try {
+      const schedulesSnapshot = await getDocs(collection(db, "FacultySchedules"));
+      if (schedulesSnapshot.empty) {
+        setFacultyList([]);
+        setMessages((prev) => [
+          ...prev,
+          { type: "bot", text: "No faculty schedules found." },
+        ]);
+        return;
+      }
+      const faculties = schedulesSnapshot.docs.map(doc => {
+        const { facultyName } = doc.data();
+        return { facultyName, facultyEmail: doc.id };
+      });
+      setFacultyList(faculties);
+    } catch (error) {
+      setFacultyList([]);
       setMessages((prev) => [
         ...prev,
-        { type: "bot", text: "No faculty schedules found." },
+        { type: "bot", text: "Error fetching schedules." },
       ]);
-      return;
     }
+  };
 
-    // Prepare faculty options: array of { name, email }
-    const faculties = schedulesSnapshot.docs.map(doc => {
-      const { facultyName } = doc.data();
-      return { facultyName, facultyEmail: doc.id };
-    });
-
-    // Build dropdown HTML for faculty selection
-    const optionsHTML = faculties
-      .map(
-        ({ facultyName, facultyEmail }) =>
-          `<option value="${facultyEmail}">${facultyName}</option>`
-      )
-      .join("");
-
-    const dropdownHTML = `
-      <p class="mb-4 text-gray-700">
-        Select a faculty to view their schedule:
-      </p>
-      <select id="faculty-select" class="border border-gray-400 rounded p-2 w-full mb-2">
-        <option value="">Select Faculty</option>
-        ${optionsHTML}
-      </select>
-      <div id="faculty-schedule-table" class="mt-4"></div>
-    `;
-
-    setMessages((prev) => [...prev, { type: "bot", text: dropdownHTML }]);
-
-    // Wait for DOM update then attach event listener to the button
-    setTimeout(() => {
-  const selectElem = document.getElementById("faculty-select");
-  const tableContainer = document.getElementById("faculty-schedule-table");
-
-  if (!selectElem || !tableContainer) return;
-
-  selectElem.addEventListener("change", async () => {
-    const selectedEmail = selectElem.value;
-
-    if (!selectedEmail) {
-      tableContainer.innerHTML = "";  // Clear schedule if no selection
-      return;
-    }
-
+  const handleFacultySelect = async (facultyEmail) => {
+    setSelectedFaculty(facultyEmail);
+    setFacultySchedule([]);
+    if (!facultyEmail) return;
     try {
-      const facultyDoc = await getDocs(collection(db, `FacultySchedules/${selectedEmail}/subjects`));
-      const facultyDataDoc = schedulesSnapshot.docs.find(doc => doc.id === selectedEmail);
-      const facultyName = facultyDataDoc?.data()?.facultyName || "";
-
-          if (facultyDoc.empty) {
-            tableContainer.innerHTML = `<p class="text-red-600">No schedule found for this faculty.</p>`;
-            return;
-          }
-
-          // Build schedule rows
-          const rows = facultyDoc.docs.map(subDoc => {
-            const data = subDoc.data();
-            const available = data.classType === "Face-to-face" ? "Available" : "Not Available";
-            return `
-              <tr class="border border-gray-300 even:bg-green-50 odd:bg-white">
-                <td class="p-2 border border-gray-300">${facultyName}</td>
-                <td class="p-2 border border-gray-300">${data.courseCode}</td>
-                <td class="p-2 border border-gray-300">${data.classCode}</td>
-                <td class="p-2 border border-gray-300">${data.courseDescription}</td>
-                <td class="p-2 border border-gray-300">${data.classType}</td>
-                <td class="p-2 border border-gray-300">${data.day}</td>
-                <td class="p-2 border border-gray-300">${data.time}</td>
-                <td class="p-2 border border-gray-300 font-semibold text-center ${
-                  available === "Available" ? "text-green-700" : "text-red-600"
-                }">${available}</td>
-                <td class="p-2 border border-gray-300">${selectedEmail}</td>
-              </tr>
-            `;
-          }).join("");
-
-          tableContainer.innerHTML = `
-            <div class="overflow-auto max-h-[400px] border border-gray-400 rounded">
-              <table class="table-auto w-full text-sm border-collapse border border-gray-400">
-                <thead class="bg-green-600 text-white sticky top-0">
-                  <tr>
-                    <th class="p-2 border">Name</th>
-                    <th class="p-2 border">Course Code</th>
-                    <th class="p-2 border">Class Code</th>
-                    <th class="p-2 border">Description</th>
-                    <th class="p-2 border">Class Type</th>
-                    <th class="p-2 border">Day</th>
-                    <th class="p-2 border">Time</th>
-                    <th class="p-2 border">Status</th>
-                    <th class="p-2 border">Email</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows}
-                </tbody>
-              </table>
-            </div>
-          `;
-        } catch (err) {
-          console.error(err);
-          tableContainer.innerHTML = `<p class="text-red-600">Error loading schedule.</p>`;
-        }
-      });
-    }, 100);
-  } catch (error) {
-    console.error("Error fetching schedules:", error);
-    setMessages((prev) => [...prev, { type: "bot", text: "Error fetching schedules." }]);
-  }
-};
+      const facultyDoc = await getDocs(collection(db, `FacultySchedules/${facultyEmail}/subjects`));
+      if (facultyDoc.empty) {
+        setFacultySchedule([]);
+        return;
+      }
+      setFacultySchedule(facultyDoc.docs.map(doc => doc.data()));
+    } catch (err) {
+      setFacultySchedule([]);
+    }
+  };
 
   const fetchFAQs = async () => {
     const snapshot = await getDocs(collection(db, "FAQs"));
@@ -353,7 +287,10 @@ export default function App() {
             {Object.keys(faqs).map((category) => (
               <div key={category}>
                 <button
-                  onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
+                  onClick={() => {
+                    setShowAvailability(false); // Hide availability UI if FAQ is clicked
+                    setSelectedCategory(selectedCategory === category ? null : category);
+                  }}
                   className={`px-4 py-2 rounded text-white ${selectedCategory === category ? "bg-green-700 w-full" : "bg-green-500 hover:bg-green-600 w-full"}`}
                 >
                   {category}
@@ -396,7 +333,6 @@ export default function App() {
 
           {showFeedbackForm && (  
             <div className="p-4 bg-white rounded shadow mt-auto">
-              {/* feedback form content */}
               <h3 className="font-semibold mb-2">Submit Feedback/Question</h3>
               <textarea
                 className="w-full p-2 border rounded mb-2"
@@ -468,6 +404,62 @@ export default function App() {
                 )}
               </div>
             ))}
+            {showAvailability && (
+              <div className="my-4">
+                <label className="block mb-2 text-gray-700">Select a faculty:</label>
+                <select
+                  className="border border-gray-400 rounded p-2 w-full mb-2"
+                  value={selectedFaculty}
+                  onChange={e => handleFacultySelect(e.target.value)}
+                >
+                  <option value="">Select Faculty</option>
+                  {facultyList.map(faculty => (
+                    <option key={faculty.facultyEmail} value={faculty.facultyEmail}>
+                      {faculty.facultyName}
+                    </option>
+                  ))}
+                </select>
+                {selectedFaculty && (
+                  <div className="mt-4">
+                    {facultySchedule.length === 0 ? (
+                      <p className="text-red-600">No schedule found for this faculty.</p>
+                    ) : (
+                      <div className="overflow-auto max-h-[400px] border border-gray-400 rounded">
+                        <table className="table-auto w-full text-sm border-collapse border border-gray-400">
+                          <thead className="bg-green-600 text-white sticky top-0">
+                            <tr>
+                              <th className="p-2 border">Course Code</th>
+                              <th className="p-2 border">Class Code</th>
+                              <th className="p-2 border">Description</th>
+                              <th className="p-2 border">Class Type</th>
+                              <th className="p-2 border">Day</th>
+                              <th className="p-2 border">Time</th>
+                              <th className="p-2 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {facultySchedule.map((data, idx) => {
+                              const available = data.classType === "Face-to-face" ? "Available" : "Not Available";
+                              return (
+                                <tr key={idx} className="border border-gray-300 even:bg-green-50 odd:bg-white">
+                                  <td className="p-2 border border-gray-300">{data.courseCode}</td>
+                                  <td className="p-2 border border-gray-300">{data.classCode}</td>
+                                  <td className="p-2 border border-gray-300">{data.courseDescription}</td>
+                                  <td className="p-2 border border-gray-300">{data.classType}</td>
+                                  <td className="p-2 border border-gray-300">{data.day}</td>
+                                  <td className="p-2 border border-gray-300">{data.time}</td>
+                                  <td className={`p-2 border border-gray-300 font-semibold text-center ${available === "Available" ? "text-green-700" : "text-red-600"}`}>{available}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
         </div>
