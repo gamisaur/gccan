@@ -26,17 +26,17 @@ export default function AdminLogin({ onLogin, onBack }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-green-100">
+    <div className="min-h-screen flex items-center justify-center bg-green-100 px-2">
       <div className="bg-white p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-md">
         {/* Logo or branding */}
-        <div className="flex justify-center mb-4">
+        <div className="flex justify-center mb-4 flex-col items-center sm:flex-row sm:items-center">
           <img
             src="/GC logo.png"
             alt="GCCAN Logo"
-            className="h-16 w-16 object-contain mr-2"
+            className="h-16 w-16 object-contain mb-2 sm:mb-0 sm:mr-2"
             style={{ borderRadius: "8px" }}
           />
-          <span className="text-green-600 font-extrabold text-3xl self-center">GCCAN</span>
+          <span className="text-green-600 font-extrabold text-3xl self-center text-center sm:text-left">GCCAN</span>
         </div>
         <h2 className="text-2xl font-bold mb-4 text-center">Admin Login</h2>
 
