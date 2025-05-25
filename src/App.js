@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import AdminLogin from "./AdminLogin";
 import AdminDashboard from "./AdminDashboard";
-import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { ref as dbRef, push as dbPush } from "firebase/database";
 import { rtdb } from "./firebase";
 
@@ -13,8 +13,10 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [faqs, setFaqs] = useState({});
   const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [user, setUser] = useState(null); // Store the Firebase user object
   const [isAdmin, setIsAdmin] = useState(false);
   const [view, setView] = useState("user");
+  const [authLoading, setAuthLoading] = useState(true);
   const chatEndRef = useRef(null);
   const messageRef = useRef(null);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -27,8 +29,10 @@ export default function App() {
 
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === "admin@gccan.com") {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+      if (firebaseUser && firebaseUser.email === "admin@gccan.com") {
         setIsAdmin(true);
         setView("admin");
       } else {
@@ -59,7 +63,6 @@ export default function App() {
     ]);
     speakText(linkedAnswer);
   };
-
 
   const handleCheckAvailability = async () => {
     setShowAvailability(true);
@@ -153,20 +156,27 @@ export default function App() {
     }
   }, [messages, ttsEnabled]);
 
+  if (authLoading) {
+    return <div>Loading...</div>;
+  }
+
   if (view === "admin") {
     return isAdmin ? (
       <AdminDashboard
+        user={user}
         onLogout={() => {
           const auth = getAuth();
           signOut(auth).then(() => {
             setIsAdmin(false);
+            setUser(null);
             setView("user");
           });
         }}
       />
     ) : (
       <AdminLogin
-        onLogin={() => {
+        onLogin={(firebaseUser) => {
+          setUser(firebaseUser);
           setIsAdmin(true);
           setView("admin");
         }}

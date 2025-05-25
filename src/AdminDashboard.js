@@ -7,13 +7,32 @@ import {
   updateDoc,
   doc,
   setDoc,
+  getDoc,
 } from "firebase/firestore";
-import { getAuth, signOut } from "firebase/auth";
+import { getAuth, signOut, updateProfile } from "firebase/auth";
 import { db, rtdb } from "./firebase";
 import { ref, onValue, push, remove, update as rtdbUpdate } from "firebase/database";
+import defaultAvatar from "./default-avatar.png";
+import Cropper from "react-easy-crop";
+import getCroppedImg from "./utils/cropImage";
 
 export default function AdminDashboard({ user, onLogout }) {
-  // Set default view to "feedback" so Feedback & Questions is shown first
+  // Cloudinary/photo states
+  const [uploading, setUploading] = useState(false);
+  const [photoURL, setPhotoURL] = useState(""); // Always set from Firestore
+  const [photoLoading, setPhotoLoading] = useState(true);
+
+  // Cropper states
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  // Sidebar menu
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+
+  // View state
   const [view, setView] = useState("feedback");
 
   // FAQ states
@@ -37,6 +56,12 @@ export default function AdminDashboard({ user, onLogout }) {
   const [feedbackList, setFeedbackList] = useState([]);
   const [notification, setNotification] = useState("");
   const prevFeedbackCount = useRef(0);
+
+  // Admin name state
+  const [adminName, setAdminName] = useState("Admin");
+
+  // Sidebar open/close state (for mobile)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Fetch FAQs
   const fetchFAQs = async () => {
@@ -76,10 +101,12 @@ export default function AdminDashboard({ user, onLogout }) {
     const feedbackRef = ref(rtdb, "feedbacks");
     const unsubscribe = onValue(feedbackRef, (snapshot) => {
       const data = snapshot.val() || {};
-      const feedbackArray = Object.entries(data).map(([id, value]) => ({
+      let feedbackArray = Object.entries(data).map(([id, value]) => ({
         id,
         ...value,
       }));
+      // Sort by timestamp descending (most recent first)
+      feedbackArray = feedbackArray.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       setFeedbackList(feedbackArray);
 
       // Notification logic
@@ -93,6 +120,83 @@ export default function AdminDashboard({ user, onLogout }) {
     return () => unsubscribe();
     // eslint-disable-next-line
   }, []);
+
+  // Fetch admin photoURL on mount and when user changes
+  useEffect(() => {
+    async function fetchAdminPhoto() {
+      setPhotoLoading(true);
+      try {
+        if (user) {
+          const adminDoc = await getDoc(doc(db, "admins", user.uid));
+          if (adminDoc.exists()) {
+            const adminData = adminDoc.data();
+            setPhotoURL(adminData.photoURL || "");
+            setAdminName(adminData.displayName || "Admin"); // Set admin name from Firestore
+            console.log("Fetched admin photoURL from Firestore:", adminData.photoURL);
+          } else {
+            setPhotoURL("");
+            setAdminName("Admin"); // Reset to default if no admin doc
+            console.log("No admin doc found for this user.");
+          }
+        }
+      } catch (err) {
+        setPhotoURL("");
+        setAdminName("Admin");
+        console.error("Error fetching admin photo:", err);
+      }
+      setPhotoLoading(false);
+    }
+    fetchAdminPhoto();
+  }, [user]);
+
+  // Cloudinary Upload Handler (accepts File, not event)
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", "profiles");
+
+    try {
+      const res = await fetch(
+        "https://api.cloudinary.com/v1_1/dfijy5ac3/image/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+      const data = await res.json();
+
+      if (!data.secure_url) {
+        throw new Error("Cloudinary upload failed");
+      }
+
+      // Debug: Log user and URL
+      console.log("User for Firestore:", user);
+      console.log("Cloudinary URL:", data.secure_url);
+
+      if (user) {
+        await updateProfile(user, { photoURL: data.secure_url });
+        await setDoc(
+          doc(db, "admins", user.uid),
+          { photoURL: data.secure_url, displayName: user.displayName, email: user.email },
+          { merge: true }
+        );
+        setPhotoURL(data.secure_url);
+        console.log("Saved photoURL to Firestore:", data.secure_url);
+      } else {
+        console.error("No user found, cannot save to Firestore!");
+      }
+
+      alert("Profile photo updated!");
+    } catch (err) {
+      alert("Upload failed.");
+      console.error("Upload error:", err);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // FAQ handlers
   const handleAddFAQ = async () => {
@@ -222,7 +326,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Delete Feedback
   const handleDeleteFeedback = async (id) => {
-    const confirmDelete = window.confirm("Delete this feedback message?");
+    const confirmDelete = window.confirm("Are you sure you want to delete this feedback message?");
     if (confirmDelete) {
       const feedbackRef = ref(rtdb, `feedbacks/${id}`);
       await remove(feedbackRef);
@@ -232,6 +336,8 @@ export default function AdminDashboard({ user, onLogout }) {
   // Mark as Resolved
   const handleMarkAsResolved = async (id) => {
     try {
+      const confirmResolve = window.confirm("Are you sure you want to mark this feedback as resolved?");
+      if (!confirmResolve) return;
       const feedbackRef = ref(rtdb, `feedbacks/${id}`);
       await rtdbUpdate(feedbackRef, { resolved: true });
     } catch (error) {
@@ -240,212 +346,465 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
+  // Check if user is admin
+  const checkIfAdmin = async (user) => {
+    if (!user) return false;
+    const adminDoc = await getDoc(doc(db, "admins", user.uid));
+    return adminDoc.exists();
+  };
+
+  useEffect(() => {
+    if (user) {
+      checkIfAdmin(user).then(isAdmin => {
+        if (isAdmin) {
+          console.log("You are logged in as an admin!");
+        } else {
+          console.log("You are NOT an admin.");
+        }
+      });
+    }
+  }, [user]);
+
   return (
-    <div className="p-4 sm:p-8 bg-gray-100 min-h-screen">
-      {/* Notification */}
-      {notification && (
-        <div className="fixed top-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded shadow-lg transition">
-          {notification}
+    <div className="flex min-h-screen bg-green-100 flex-row-reverse">
+      {/* Main Content */}
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto h-screen transition-all duration-300">
+        {/* Notification */}
+        {notification && (
+          <div className="fixed top-6 right-6 z-50 flex items-center gap-3 bg-green-500 text-white px-10 py-5 rounded-xl shadow-2xl transition text-2xl font-bold">
+            {/* Bell Icon (SVG) */}
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mr-2 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            {notification}
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0 relative">
+          <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
         </div>
-      )}
+        {/* Arrow toggle button - only on mobile, at the edge of the screen, below the heading */}
+        {!sidebarOpen && (
+          <button
+            className="fixed left-0 z-50 bg-white border border-gray-300 shadow p-1 rounded-none flex items-center justify-center transition sm:hidden"
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: 0,
+              top: "50px", // Adjust this value if you want it closer/farther from the top
+            }}
+            onClick={() => setSidebarOpen((open) => !open)}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          >
+            <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
-        <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 whitespace-nowrap"
-        >
-          Logout
-        </button>
-      </div>
-
-      {/* Toggle Buttons */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
-        <button
-          onClick={() => setView("feedback")}
-          className={`px-4 py-2 rounded text-center ${
-            view === "feedback" ? "bg-green-500 text-white" : "bg-gray-300"
-          }`}
-        >
-          View Feedback & Questions
-        </button>
-        <button
-          onClick={() => setView("faqs")}
-          className={`px-4 py-2 rounded text-center ${
-            view === "faqs" ? "bg-green-500 text-white" : "bg-gray-300"
-          }`}
-        >
-          Manage FAQs
-        </button>
-        <button
-          onClick={() => setView("schedules")}
-          className={`px-4 py-2 rounded text-center ${
-            view === "schedules" ? "bg-green-500 text-white" : "bg-gray-300"
-          }`}
-        >
-          Manage Faculty Schedules
-        </button>
-      </div>
-
-      {/* FAQ Section */}
-      {view === "faqs" && (
-        <>
-          <div className="bg-white p-4 rounded shadow mb-6 max-w-full overflow-x-auto">
-            <h2 className="text-xl font-semibold mb-2">Add New FAQ</h2>
-            <input
-              type="text"
-              placeholder="Category"
-              value={faqFormData.category}
-              onChange={(e) => setFaqFormData({ ...faqFormData, category: e.target.value })}
-              className="p-2 border border-gray-300 rounded mb-2 w-full"
-            />
-            <input
-              type="text"
-              placeholder="Question"
-              value={faqFormData.question}
-              onChange={(e) => setFaqFormData({ ...faqFormData, question: e.target.value })}
-              className="p-2 border border-gray-300 rounded mb-2 w-full"
-            />
-            <textarea
-              placeholder="Answer"
-              value={faqFormData.answer}
-              onChange={(e) => setFaqFormData({ ...faqFormData, answer: e.target.value })}
-              className="p-2 border border-gray-300 rounded mb-2 w-full"
-              rows={4}
-            />
-            <button
-              onClick={handleAddFAQ}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
-            >
-              Add FAQ
-            </button>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
-            <h2 className="text-xl font-semibold mb-4">Existing FAQs</h2>
-            {faqs.map((faq) => (
-              <div key={faq.id} className="border-b py-2">
-                <p><strong>Category:</strong> {faq.category}</p>
-                <p><strong>Q:</strong> {faq.question}</p>
-                <p><strong>A:</strong> {faq.answer}</p>
-                <div className="flex gap-4 mt-2 flex-wrap">
-                  <button
-                    onClick={() => handleUpdateFAQ(faq.id)}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteFAQ(faq.id, faq.question)}
-                    className="text-red-600 hover:underline"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Faculty Schedule Section */}
-      {view === "schedules" && (
-        <>
-          <div className="bg-white p-4 rounded shadow mb-6 max-w-full overflow-x-auto">
-            <h2 className="text-xl font-semibold mb-2">Add Faculty Schedule</h2>
-            {["facultyEmail", "facultyName", "courseCode", "classCode", "courseDescription", "classType", "day", "time"].map((field) => (
+        {/* Remove the toggle buttons from here */}
+        {/* FAQ Section */}
+        {view === "faqs" && (
+          <>
+            <div className="bg-white p-4 rounded shadow-lg mb-6 max-w-full overflow-x-auto">
+              <h2 className="text-xl font-semibold mb-2">Add New FAQ</h2>
               <input
-                key={field}
-                type={field === "facultyEmail" ? "email" : "text"}
-                placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
-                value={scheduleFormData[field]}
-                onChange={(e) => setScheduleFormData({ ...scheduleFormData, [field]: e.target.value })}
+                type="text"
+                placeholder="Category"
+                value={faqFormData.category}
+                onChange={(e) => setFaqFormData({ ...faqFormData, category: e.target.value })}
                 className="p-2 border border-gray-300 rounded mb-2 w-full"
               />
-            ))}
-            <button
-              onClick={handleAddSchedule}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
-            >
-              Add Schedule
-            </button>
-          </div>
+              <input
+                type="text"
+                placeholder="Question"
+                value={faqFormData.question}
+                onChange={(e) => setFaqFormData({ ...faqFormData, question: e.target.value })}
+                className="p-2 border border-gray-300 rounded mb-2 w-full"
+              />
+              <textarea
+                placeholder="Answer"
+                value={faqFormData.answer}
+                onChange={(e) => setFaqFormData({ ...faqFormData, answer: e.target.value })}
+                className="p-2 border border-gray-300 rounded mb-2 w-full"
+                rows={4}
+              />
+              <button
+                onClick={handleAddFAQ}
+                className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
+              >
+                Add FAQ
+              </button>
+            </div>
 
-          <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
-            <h2 className="text-xl font-semibold mb-4">Existing Faculty Schedules</h2>
-            {schedules.length === 0 && <p>No schedules found.</p>}
-            {schedules.map((schedule) => (
-              <div key={schedule.id} className="border-b py-2">
-                <p><strong>Faculty:</strong> {schedule.facultyName} ({schedule.facultyEmail})</p>
-                <p><strong>Course Code:</strong> {schedule.courseCode}</p>
-                <p><strong>Class Code:</strong> {schedule.classCode}</p>
-                <p><strong>Description:</strong> {schedule.courseDescription}</p>
-                <p>
-                  <strong>Class Type:</strong>{" "}
-                  <select
-                    value={schedule.classType}
-                    onChange={(e) =>
-                      handleChangeClassType(schedule.facultyId, schedule.id, e.target.value)
-                    }
-                    className="border rounded px-1 py-0.5"
-                  >
-                    <option value="Face-to-face">Face-to-face</option>
-                    <option value="Online">Online</option>
-                  </select>
-                </p>
-                <p><strong>Day:</strong> {schedule.day}</p>
-                <p><strong>Time:</strong> {schedule.time}</p>
-                <div className="flex gap-4 mt-2 flex-wrap">
-                  <button
-                    onClick={() => handleDeleteSchedule(schedule.facultyId, schedule.id)}
-                    className="text-red-600 hover:underline"
-                  >
-                    Delete
-                  </button>
+            <div className="bg-white p-4 rounded shadow-lg max-w-full overflow-x-auto">
+              <h2 className="text-xl font-semibold mb-4">Existing FAQs</h2>
+              {faqs.map((faq) => (
+                <div key={faq.id} className="border-b py-2">
+                  <p><strong>Category:</strong> {faq.category}</p>
+                  <p><strong>Q:</strong> {faq.question}</p>
+                  <p><strong>A:</strong> {faq.answer}</p>
+                  <div className="flex gap-4 mt-2 flex-wrap">
+                    <button
+                      onClick={() => handleUpdateFAQ(faq.id)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFAQ(faq.id, faq.question)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Faculty Schedule Section */}
+        {view === "schedules" && (
+          <>
+            <div className="bg-white p-4 rounded shadow-lg mb-6 max-w-full overflow-x-auto">
+              <h2 className="text-xl font-semibold mb-2">Add Faculty Schedule</h2>
+              {["facultyEmail", "facultyName", "courseCode", "classCode", "courseDescription", "classType", "day", "time"].map((field) => (
+                <input
+                  key={field}
+                  type={field === "facultyEmail" ? "email" : "text"}
+                  placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+                  value={scheduleFormData[field]}
+                  onChange={(e) => setScheduleFormData({ ...scheduleFormData, [field]: e.target.value })}
+                  className="p-2 border border-gray-300 rounded mb-2 w-full"
+                />
+              ))}
+              <button
+                onClick={handleAddSchedule}
+                className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
+              >
+                Add Schedule
+              </button>
+            </div>
+
+            <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
+              <h2 className="text-xl font-semibold mb-4">Existing Faculty Schedules</h2>
+              {schedules.length === 0 && <p>No schedules found.</p>}
+              {schedules.map((schedule) => (
+                <div key={schedule.id} className="border-b py-2">
+                  <p><strong>Faculty:</strong> {schedule.facultyName} ({schedule.facultyEmail})</p>
+                  <p><strong>Course Code:</strong> {schedule.courseCode}</p>
+                  <p><strong>Class Code:</strong> {schedule.classCode}</p>
+                  <p><strong>Description:</strong> {schedule.courseDescription}</p>
+                  <p>
+                    <strong>Class Type:</strong>{" "}
+                    <select
+                      value={schedule.classType}
+                      onChange={(e) =>
+                        handleChangeClassType(schedule.facultyId, schedule.id, e.target.value)
+                      }
+                      className="border rounded px-1 py-0.5"
+                    >
+                      <option value="Face-to-face">Face-to-face</option>
+                      <option value="Online">Online</option>
+                    </select>
+                  </p>
+                  <p><strong>Day:</strong> {schedule.day}</p>
+                  <p><strong>Time:</strong> {schedule.time}</p>
+                  <div className="flex gap-4 mt-2 flex-wrap">
+                    <button
+                      onClick={() => handleDeleteSchedule(schedule.facultyId, schedule.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Feedback Section */}
+        {view === "feedback" && (
+          <div className="bg-white p-4 rounded shadow-lg max-w-full overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-4">User Feedback / Questions</h2>
+
+            {feedbackList.length === 0 ? (
+              <p>No feedback submitted yet.</p>
+            ) : (
+              feedbackList.map((feedback) => (
+                <div key={feedback.id} className="border-b py-3">
+                  <p><strong>Email:</strong> {feedback.email}</p>
+                  <p><strong>Message:</strong> {feedback.feedback}</p>
+                  <p className="text-sm text-gray-500">
+                    Status: {feedback.resolved ? "Resolved " : "Unresolved "}
+                    {feedback.timestamp
+                      ? new Date(feedback.timestamp).toLocaleString()
+                      : "No timestamp"}
+                  </p>
+                  <div className="mt-2 flex gap-4 flex-wrap">
+                    <button
+                      onClick={() => handleDeleteFeedback(feedback.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => handleMarkAsResolved(feedback.id)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Mark as Resolved
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        </>
-      )}
+        )}
 
-      {/* Feedback Section */}
-      {view === "feedback" && (
-        <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
-          <h2 className="text-xl font-semibold mb-4">User Feedback / Questions</h2>
+        {/* Cropper Modal */}
+        {showCropper && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-white p-4 rounded shadow-lg flex flex-col items-center">
+              <div className="relative w-72 h-72 bg-gray-200">
+                <Cropper
+                  image={selectedImage}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
+                />
+              </div>
+              <div className="flex gap-4 mt-4">
+                <button
+                  className="bg-green-500 text-white px-4 py-2 rounded"
+                  onClick={async () => {
+                    const croppedBlob = await getCroppedImg(selectedImage, croppedAreaPixels);
+                    const croppedFile = new File([croppedBlob], "cropped.jpg", { type: "image/jpeg" });
+                    await handleImageUpload(croppedFile);
+                    setShowCropper(false);
+                    setSelectedImage(null);
+                  }}
+                >
+                  Crop & Upload
+                </button>
+                <button
+                  className="bg-gray-300 px-4 py-2 rounded"
+                  onClick={() => {
+                    setShowCropper(false);
+                    setSelectedImage(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
 
-          {feedbackList.length === 0 ? (
-            <p>No feedback submitted yet.</p>
+      {/* Sidebar: Drawer on mobile, static on desktop (right side) */}
+      <aside
+        className={`
+          fixed z-30 top-0 h-full w-64 bg-white shadow-lg flex flex-col items-center py-8 px-4
+          rounded-none flex-shrink-0 overflow-hidden transition-transform duration-300
+          sm:static sm:translate-x-0
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-64"} 
+          sm:w-64
+        `}
+        style={{
+          maxWidth: "100vw",
+          minHeight: "100vh",
+          left: 0,
+          right: "auto",
+          top: 0,
+          paddingLeft: 0,
+          paddingRight: 0,
+        }}
+      >
+        <div className="relative mb-4">
+          {photoLoading ? (
+            <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
+              <span className="text-gray-400">Loading...</span>
+            </div>
           ) : (
-            feedbackList.map((feedback) => (
-              <div key={feedback.id} className="border-b py-3">
-                <p><strong>Email:</strong> {feedback.email}</p>
-                <p><strong>Message:</strong> {feedback.feedback}</p>
-                <p className="text-sm text-gray-500">
-                  Status: {feedback.resolved ? "Resolved " : "Unresolved "}
-                  {feedback.timestamp
-                    ? new Date(feedback.timestamp).toLocaleString()
-                    : "No timestamp"}
-                </p>
-                <div className="mt-2 flex gap-4 flex-wrap">
-                  <button
-                    onClick={() => handleDeleteFeedback(feedback.id)}
-                    className="text-red-600 hover:underline"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => handleMarkAsResolved(feedback.id)}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Mark as Resolved
-                  </button>
-                </div>
-              </div>
-            ))
+            <img
+              src={photoURL || defaultAvatar}
+              alt="Admin"
+              className="w-24 h-24 rounded-full object-cover border-4 border-green-500 cursor-pointer"
+              onClick={() => {
+                if (photoURL && photoURL !== defaultAvatar) setShowPhotoMenu(true);
+              }}
+            />
+          )}
+          {/* Show the + icon only if there is no uploaded photo */}
+          {!photoLoading && (!photoURL || photoURL === defaultAvatar) && (
+            <label className="absolute bottom-2 right-2 bg-green-500 rounded-full p-1 cursor-pointer hover:bg-green-600 shadow-lg transition">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  if (!user) {
+                    alert("You must be logged in to upload a photo.");
+                    return;
+                  }
+                  const file = e.target.files[0];
+                  if (file) {
+                    setSelectedImage(URL.createObjectURL(file));
+                    setShowCropper(true);
+                  }
+                }}
+                disabled={uploading || !user}
+              />
+              {/* Plus icon */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-6 h-6 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </label>
+          )}
+          {uploading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-full">
+              <span className="text-green-700 font-bold">Uploading...</span>
+            </div>
+          )}
+          {/* Photo menu */}
+          {photoURL && photoURL !== defaultAvatar && showPhotoMenu && (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white border rounded shadow-lg z-10 flex flex-col min-w-[140px]">
+              <label className="px-4 py-2 cursor-pointer hover:bg-gray-100">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      setSelectedImage(URL.createObjectURL(file));
+                      setShowCropper(true);
+                    }
+                    setShowPhotoMenu(false);
+                  }}
+                  disabled={uploading}
+                />
+                Change Photo
+              </label>
+              <button
+                className="px-4 py-2 text-left hover:bg-gray-100"
+                onClick={async () => {
+                  setPhotoURL("");
+                  if (user) {
+                    await updateProfile(user, { photoURL: "" });
+                    await setDoc(
+                      doc(db, "admins", user.uid),
+                      { photoURL: "", displayName: user.displayName, email: user.email },
+                      { merge: true }
+                    );
+                  }
+                  setShowPhotoMenu(false);
+                }}
+              >
+                Remove Photo
+              </button>
+              <button
+                className="px-4 py-2 text-left text-red-500 hover:bg-gray-100"
+                onClick={() => setShowPhotoMenu(false)}
+              >
+                Cancel
+              </button>
+            </div>
           )}
         </div>
+        <h2 className="text-xl font-bold mb-1 text-center">
+          {user?.displayName || adminName}
+        </h2>
+        <p className="text-gray-500 text-center mb-6 break-all">
+          {user?.email || ""}
+        </p>
+        <hr className="w-full border-t border-gray-300 mb-6 rounded-none" />
+
+        {/* Navigation */}
+        <nav className="mb-8 flex flex-col gap-2 w-full">
+          <SidebarButton
+            icon={
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            }
+            label="View Feedback & Questions"
+            active={view === "feedback"}
+            onClick={() => setView("feedback")}
+          />
+          <SidebarButton
+            icon={
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M8 17l4 4 4-4m-4-5v9" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            }
+            label="Manage FAQs"
+            active={view === "faqs"}
+            onClick={() => setView("faqs")}
+          />
+          <SidebarButton
+            icon={
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            }
+            label="Manage Faculty Schedules"
+            active={view === "schedules"}
+            onClick={() => setView("schedules")}
+          />
+        </nav>
+
+        {/* Actions */}
+        <button
+          onClick={handleLogout}
+          className="absolute left-4 bottom-6 flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-none transition text-sm shadow"
+          style={{ borderRadius: "0" }}
+          title="Logout"
+        >
+          {/* Logout SVG icon */}
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+          </svg>
+          Logout
+        </button>
+      </aside>
+
+      {/* Overlay for mobile: click to close sidebar */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black bg-opacity-0 sm:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close sidebar overlay"
+        />
       )}
     </div>
+  );
+}
+
+// Add this helper component above your main export:
+function SidebarButton({ icon, label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center px-4 py-2 w-full text-left transition
+        ${active ? "bg-green-100 border-l-4 border-green-500 text-green-700 font-semibold" : "hover:bg-gray-100"}
+        rounded-none`} // <-- sharp edges
+      style={{ borderRadius: "0" }} // <-- sharp edges
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
