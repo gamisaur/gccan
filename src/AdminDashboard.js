@@ -306,6 +306,8 @@ export default function AdminDashboard({ user, onLogout }) {
   };
 
   const handleLogout = async () => {
+    const confirmed = window.confirm("Are you sure you want to log out?");
+    if (!confirmed) return;
     const auth = getAuth();
     await signOut(auth);
     onLogout();

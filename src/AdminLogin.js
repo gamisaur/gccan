@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
 
 export default function AdminLogin({ onLogin, onBack }) {
   const [email, setEmail] = useState("");
@@ -14,7 +14,8 @@ export default function AdminLogin({ onLogin, onBack }) {
     setLoading(true);
     try {
       const auth = getAuth();
-      // Optionally handle rememberMe here if you want to persist session
+      // Set persistence based on "Remember Me"
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       onLogin(userCredential.user);
     } catch (err) {
