@@ -4,6 +4,8 @@ import { db } from "./firebase";
 import AdminLogin from "./AdminLogin";
 import AdminDashboard from "./AdminDashboard";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { ref as dbRef, push as dbPush } from "firebase/database";
+import { rtdb } from "./firebase";
 
 export default function App() {
   const [started, setStarted] = useState(false);
@@ -17,6 +19,7 @@ export default function App() {
   const messageRef = useRef(null);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
+  const [userEmail, setUserEmail] = useState("");
   const [facultyList, setFacultyList] = useState([]);
   const [selectedFaculty, setSelectedFaculty] = useState("");
   const [facultySchedule, setFacultySchedule] = useState([]);
@@ -179,10 +182,6 @@ export default function App() {
         style={{ backgroundImage: "url('/homeBG.jpg')" }}
       >
         <div className="flex flex-col items-center px-4 py-6 space-y-8">
-          <div className="flex justify-center mt-12 w-full">
-            <img src="/GC logo.png" alt="Logo" className="w-40 h-40" />
-          </div>
-
           <div className="flex flex-col sm:flex-row gap-8 sm:mt-40 mt-32 px-5">
             <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
               <img
@@ -218,7 +217,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 w-full bg-gray-100/20 backdrop-blur-md py-1 text-center text-sm text-white">
+          <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md py-1 text-center text-sm text-white">
             <p>
               ✉️ Email us at{" "}
               <span className="font-semibold">info@gordoncollege.edu.ph</span>
@@ -334,49 +333,71 @@ export default function App() {
           {showFeedbackForm && (  
             <div className="p-4 bg-white rounded shadow mt-auto">
               <h3 className="font-semibold mb-2">Submit Feedback/Question</h3>
-              <textarea
-                className="w-full p-2 border rounded mb-2"
-                rows={4}
-                placeholder="Type your feedback or question here..."
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-                  onClick={() => {
-                    setShowFeedbackForm(false);
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!userEmail.trim()) {
+                    alert("Please enter your email.");
+                    return;
+                  }
+                  if (!feedbackText.trim()) {
+                    alert("Please enter your feedback before submitting.");
+                    return;
+                  }
+                  try {
+                    const feedbackRef = dbRef(rtdb, "feedbacks");
+                    await dbPush(feedbackRef, {
+                      email: userEmail.trim(),
+                      feedback: feedbackText.trim(),
+                      timestamp: Date.now(),
+                      resolved: false,
+                    });
+                    alert("Thank you for your feedback!");
                     setFeedbackText("");
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-700"
-                  onClick={async () => {
-                    if (!feedbackText.trim()) {
-                      alert("Please enter your feedback before submitting.");
-                      return;
-                    }
-                    try {
-                      await import("firebase/firestore").then(async ({ collection, addDoc }) => {
-                        await addDoc(collection(db, "Feedback"), {
-                          feedback: feedbackText.trim(),
-                          timestamp: new Date(),
-                        });
-                      });
-                      alert("Thank you for your feedback!");
-                      setFeedbackText("");
+                    setUserEmail("");
+                    setShowFeedbackForm(false);
+                  } catch (err) {
+                    alert("Failed to submit feedback. Please try again.");
+                    console.error(err);
+                  }
+                }}
+              >
+                <input
+                  type="email"
+                  className="w-full p-2 border rounded mb-2"
+                  placeholder="Your email (required)"
+                  value={userEmail || ""}
+                  onChange={e => setUserEmail(e.target.value)}
+                  required
+                />
+                <textarea
+                  className="w-full p-2 border rounded mb-2"
+                  rows={4}
+                  placeholder="Type your feedback or question here..."
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  required
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                    onClick={() => {
                       setShowFeedbackForm(false);
-                    } catch (err) {
-                      alert("Failed to submit feedback. Please try again.");
-                      console.error(err);
-                    }
-                  }}
-                >
-                  Submit
-                </button>
-              </div>
+                      setFeedbackText("");
+                      setUserEmail("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-700"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>

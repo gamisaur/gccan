@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -9,10 +9,12 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { getAuth, signOut } from "firebase/auth";
-import { db } from "./firebase";
+import { db, rtdb } from "./firebase";
+import { ref, onValue, push, remove, update as rtdbUpdate } from "firebase/database";
 
 export default function AdminDashboard({ user, onLogout }) {
-  const [view, setView] = useState("faqs");
+  // Set default view to "feedback" so Feedback & Questions is shown first
+  const [view, setView] = useState("feedback");
 
   // FAQ states
   const [faqs, setFaqs] = useState([]);
@@ -31,8 +33,10 @@ export default function AdminDashboard({ user, onLogout }) {
     time: "",
   });
 
-  //Feedback states
-  const[feedbackList, setFeedbackList] = useState([]);
+  // Feedback states (Realtime Database)
+  const [feedbackList, setFeedbackList] = useState([]);
+  const [notification, setNotification] = useState("");
+  const prevFeedbackCount = useRef(0);
 
   // Fetch FAQs
   const fetchFAQs = async () => {
@@ -64,25 +68,30 @@ export default function AdminDashboard({ user, onLogout }) {
     setSchedules(schedulesData);
   };
 
-  // Fetch Feedbacks
-    const fetchFeedback = async () => {
-    try {
-      const feedbackRef = collection(db, "Feedback");
-      const snapshot = await getDocs(feedbackRef);
-      const feedbackData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setFeedbackList(feedbackData); 
-    } catch (error) {
-      console.error("Error fetching feedback:", error);
-    }
-  };
-
+  // Fetch Feedbacks (Realtime Database, real-time listener)
   useEffect(() => {
     fetchFAQs();
     fetchSchedules();
-    fetchFeedback();
+
+    const feedbackRef = ref(rtdb, "feedbacks");
+    const unsubscribe = onValue(feedbackRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const feedbackArray = Object.entries(data).map(([id, value]) => ({
+        id,
+        ...value,
+      }));
+      setFeedbackList(feedbackArray);
+
+      // Notification logic
+      if (prevFeedbackCount.current !== 0 && feedbackArray.length > prevFeedbackCount.current) {
+        setNotification("New feedback received!");
+        setTimeout(() => setNotification(""), 4000);
+      }
+      prevFeedbackCount.current = feedbackArray.length;
+    });
+
+    return () => unsubscribe();
+    // eslint-disable-next-line
   }, []);
 
   // FAQ handlers
@@ -198,222 +207,245 @@ export default function AdminDashboard({ user, onLogout }) {
     onLogout();
   };
 
+  // --- FEEDBACK HANDLERS (Realtime Database) ---
+
+  // Add Feedback (example usage, call this from your feedback form)
+  const handleAddFeedback = async ({ email, feedback }) => {
+    const feedbackRef = ref(rtdb, "feedbacks");
+    await push(feedbackRef, {
+      email,
+      feedback,
+      timestamp: Date.now(),
+      resolved: false,
+    });
+  };
+
+  // Delete Feedback
   const handleDeleteFeedback = async (id) => {
     const confirmDelete = window.confirm("Delete this feedback message?");
     if (confirmDelete) {
-      await deleteDoc(doc(db, "Feedback", id));
-      fetchFeedback();
+      const feedbackRef = ref(rtdb, `feedbacks/${id}`);
+      await remove(feedbackRef);
     }
   };
 
+  // Mark as Resolved
   const handleMarkAsResolved = async (id) => {
-  try {
-    await updateDoc(doc(db, "Feedback", id), {
-      resolved: true,
-    });
-    fetchFeedback(); // Refresh feedback list
-  } catch (error) {
-    console.error("Error marking as resolved:", error);
-    alert("Failed to mark as resolved.");
-  }
-};
+    try {
+      const feedbackRef = ref(rtdb, `feedbacks/${id}`);
+      await rtdbUpdate(feedbackRef, { resolved: true });
+    } catch (error) {
+      console.error("Error marking as resolved:", error);
+      alert("Failed to mark as resolved.");
+    }
+  };
 
-return (
-  <div className="p-4 sm:p-8 bg-gray-100 min-h-screen">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
-      <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
-      <button
-        onClick={handleLogout}
-        className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 whitespace-nowrap"
-      >
-        Logout
-      </button>
-    </div>
-
-    {/* Toggle Buttons */}
-    <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
-      <button
-        onClick={() => setView("faqs")}
-        className={`px-4 py-2 rounded text-center ${
-          view === "faqs" ? "bg-green-500 text-white" : "bg-gray-300"
-        }`}
-      >
-        Manage FAQs
-      </button>
-      <button
-        onClick={() => setView("schedules")}
-        className={`px-4 py-2 rounded text-center ${
-          view === "schedules" ? "bg-green-500 text-white" : "bg-gray-300"
-        }`}
-      >
-        Manage Faculty Schedules
-      </button>
-      <button
-        onClick={() => setView("feedback")}
-        className={`px-4 py-2 rounded text-center ${
-          view === "feedback" ? "bg-green-500 text-white" : "bg-gray-300"
-        }`}
-      >
-        View Feedback & Questions
-      </button>
-    </div>
-
-    {/* FAQ Section */}
-    {view === "faqs" && (
-      <>
-        <div className="bg-white p-4 rounded shadow mb-6 max-w-full overflow-x-auto">
-          <h2 className="text-xl font-semibold mb-2">Add New FAQ</h2>
-          <input
-            type="text"
-            placeholder="Category"
-            value={faqFormData.category}
-            onChange={(e) => setFaqFormData({ ...faqFormData, category: e.target.value })}
-            className="p-2 border border-gray-300 rounded mb-2 w-full"
-          />
-          <input
-            type="text"
-            placeholder="Question"
-            value={faqFormData.question}
-            onChange={(e) => setFaqFormData({ ...faqFormData, question: e.target.value })}
-            className="p-2 border border-gray-300 rounded mb-2 w-full"
-          />
-          <textarea
-            placeholder="Answer"
-            value={faqFormData.answer}
-            onChange={(e) => setFaqFormData({ ...faqFormData, answer: e.target.value })}
-            className="p-2 border border-gray-300 rounded mb-2 w-full"
-            rows={4}
-          />
-          <button
-            onClick={handleAddFAQ}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
-          >
-            Add FAQ
-          </button>
+  return (
+    <div className="p-4 sm:p-8 bg-gray-100 min-h-screen">
+      {/* Notification */}
+      {notification && (
+        <div className="fixed top-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded shadow-lg transition">
+          {notification}
         </div>
+      )}
 
-        <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
-          <h2 className="text-xl font-semibold mb-4">Existing FAQs</h2>
-          {faqs.map((faq) => (
-            <div key={faq.id} className="border-b py-2">
-              <p><strong>Category:</strong> {faq.category}</p>
-              <p><strong>Q:</strong> {faq.question}</p>
-              <p><strong>A:</strong> {faq.answer}</p>
-              <div className="flex gap-4 mt-2 flex-wrap">
-                <button
-                  onClick={() => handleUpdateFAQ(faq.id)}
-                  className="text-blue-600 hover:underline"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDeleteFAQ(faq.id, faq.question)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </>
-    )}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+        <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
+        <button
+          onClick={handleLogout}
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 whitespace-nowrap"
+        >
+          Logout
+        </button>
+      </div>
 
-    {/* Faculty Schedule Section */}
-    {view === "schedules" && (
-      <>
-        <div className="bg-white p-4 rounded shadow mb-6 max-w-full overflow-x-auto">
-          <h2 className="text-xl font-semibold mb-2">Add Faculty Schedule</h2>
-          {["facultyEmail", "facultyName", "courseCode", "classCode", "courseDescription", "classType", "day", "time"].map((field) => (
+      {/* Toggle Buttons */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
+        <button
+          onClick={() => setView("feedback")}
+          className={`px-4 py-2 rounded text-center ${
+            view === "feedback" ? "bg-green-500 text-white" : "bg-gray-300"
+          }`}
+        >
+          View Feedback & Questions
+        </button>
+        <button
+          onClick={() => setView("faqs")}
+          className={`px-4 py-2 rounded text-center ${
+            view === "faqs" ? "bg-green-500 text-white" : "bg-gray-300"
+          }`}
+        >
+          Manage FAQs
+        </button>
+        <button
+          onClick={() => setView("schedules")}
+          className={`px-4 py-2 rounded text-center ${
+            view === "schedules" ? "bg-green-500 text-white" : "bg-gray-300"
+          }`}
+        >
+          Manage Faculty Schedules
+        </button>
+      </div>
+
+      {/* FAQ Section */}
+      {view === "faqs" && (
+        <>
+          <div className="bg-white p-4 rounded shadow mb-6 max-w-full overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-2">Add New FAQ</h2>
             <input
-              key={field}
-              type={field === "facultyEmail" ? "email" : "text"}
-              placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
-              value={scheduleFormData[field]}
-              onChange={(e) => setScheduleFormData({ ...scheduleFormData, [field]: e.target.value })}
+              type="text"
+              placeholder="Category"
+              value={faqFormData.category}
+              onChange={(e) => setFaqFormData({ ...faqFormData, category: e.target.value })}
               className="p-2 border border-gray-300 rounded mb-2 w-full"
             />
-          ))}
-          <button
-            onClick={handleAddSchedule}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
-          >
-            Add Schedule
-          </button>
-        </div>
+            <input
+              type="text"
+              placeholder="Question"
+              value={faqFormData.question}
+              onChange={(e) => setFaqFormData({ ...faqFormData, question: e.target.value })}
+              className="p-2 border border-gray-300 rounded mb-2 w-full"
+            />
+            <textarea
+              placeholder="Answer"
+              value={faqFormData.answer}
+              onChange={(e) => setFaqFormData({ ...faqFormData, answer: e.target.value })}
+              className="p-2 border border-gray-300 rounded mb-2 w-full"
+              rows={4}
+            />
+            <button
+              onClick={handleAddFAQ}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
+            >
+              Add FAQ
+            </button>
+          </div>
 
+          <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-4">Existing FAQs</h2>
+            {faqs.map((faq) => (
+              <div key={faq.id} className="border-b py-2">
+                <p><strong>Category:</strong> {faq.category}</p>
+                <p><strong>Q:</strong> {faq.question}</p>
+                <p><strong>A:</strong> {faq.answer}</p>
+                <div className="flex gap-4 mt-2 flex-wrap">
+                  <button
+                    onClick={() => handleUpdateFAQ(faq.id)}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteFAQ(faq.id, faq.question)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Faculty Schedule Section */}
+      {view === "schedules" && (
+        <>
+          <div className="bg-white p-4 rounded shadow mb-6 max-w-full overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-2">Add Faculty Schedule</h2>
+            {["facultyEmail", "facultyName", "courseCode", "classCode", "courseDescription", "classType", "day", "time"].map((field) => (
+              <input
+                key={field}
+                type={field === "facultyEmail" ? "email" : "text"}
+                placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+                value={scheduleFormData[field]}
+                onChange={(e) => setScheduleFormData({ ...scheduleFormData, [field]: e.target.value })}
+                className="p-2 border border-gray-300 rounded mb-2 w-full"
+              />
+            ))}
+            <button
+              onClick={handleAddSchedule}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full sm:w-auto"
+            >
+              Add Schedule
+            </button>
+          </div>
+
+          <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-4">Existing Faculty Schedules</h2>
+            {schedules.length === 0 && <p>No schedules found.</p>}
+            {schedules.map((schedule) => (
+              <div key={schedule.id} className="border-b py-2">
+                <p><strong>Faculty:</strong> {schedule.facultyName} ({schedule.facultyEmail})</p>
+                <p><strong>Course Code:</strong> {schedule.courseCode}</p>
+                <p><strong>Class Code:</strong> {schedule.classCode}</p>
+                <p><strong>Description:</strong> {schedule.courseDescription}</p>
+                <p>
+                  <strong>Class Type:</strong>{" "}
+                  <select
+                    value={schedule.classType}
+                    onChange={(e) =>
+                      handleChangeClassType(schedule.facultyId, schedule.id, e.target.value)
+                    }
+                    className="border rounded px-1 py-0.5"
+                  >
+                    <option value="Face-to-face">Face-to-face</option>
+                    <option value="Online">Online</option>
+                  </select>
+                </p>
+                <p><strong>Day:</strong> {schedule.day}</p>
+                <p><strong>Time:</strong> {schedule.time}</p>
+                <div className="flex gap-4 mt-2 flex-wrap">
+                  <button
+                    onClick={() => handleDeleteSchedule(schedule.facultyId, schedule.id)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Feedback Section */}
+      {view === "feedback" && (
         <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
-          <h2 className="text-xl font-semibold mb-4">Existing Faculty Schedules</h2>
-          {schedules.length === 0 && <p>No schedules found.</p>}
-          {schedules.map((schedule) => (
-            <div key={schedule.id} className="border-b py-2">
-              <p><strong>Faculty:</strong> {schedule.facultyName} ({schedule.facultyEmail})</p>
-              <p><strong>Course Code:</strong> {schedule.courseCode}</p>
-              <p><strong>Class Code:</strong> {schedule.classCode}</p>
-              <p><strong>Description:</strong> {schedule.courseDescription}</p>
-              <p>
-                <strong>Class Type:</strong>{" "}
-                <select
-                  value={schedule.classType}
-                  onChange={(e) =>
-                    handleChangeClassType(schedule.facultyId, schedule.id, e.target.value)
-                  }
-                  className="border rounded px-1 py-0.5"
-                >
-                  <option value="Face-to-face">Face-to-face</option>
-                  <option value="Online">Online</option>
-                </select>
-              </p>
-              <p><strong>Day:</strong> {schedule.day}</p>
-              <p><strong>Time:</strong> {schedule.time}</p>
-              <div className="flex gap-4 mt-2 flex-wrap">
-                <button
-                  onClick={() => handleDeleteSchedule(schedule.facultyId, schedule.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
+          <h2 className="text-xl font-semibold mb-4">User Feedback / Questions</h2>
+
+          {feedbackList.length === 0 ? (
+            <p>No feedback submitted yet.</p>
+          ) : (
+            feedbackList.map((feedback) => (
+              <div key={feedback.id} className="border-b py-3">
+                <p><strong>Email:</strong> {feedback.email}</p>
+                <p><strong>Message:</strong> {feedback.feedback}</p>
+                <p className="text-sm text-gray-500">
+                  Status: {feedback.resolved ? "Resolved " : "Unresolved "}
+                  {feedback.timestamp
+                    ? new Date(feedback.timestamp).toLocaleString()
+                    : "No timestamp"}
+                </p>
+                <div className="mt-2 flex gap-4 flex-wrap">
+                  <button
+                    onClick={() => handleDeleteFeedback(feedback.id)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => handleMarkAsResolved(feedback.id)}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Mark as Resolved
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
-      </>
-    )}
-
-    {/* Feedback Section */}
-    {view === "feedback" && (
-      <div className="bg-white p-4 rounded shadow max-w-full overflow-x-auto">
-        <h2 className="text-xl font-semibold mb-4">User Feedback / Questions</h2>
-
-        {feedbackList.length === 0 ? (
-          <p>No feedback submitted yet.</p>
-        ) : (
-          feedbackList.map((feedback) => (
-            <div key={feedback.id} className="border-b py-3">
-              <p><strong>Message:</strong> {feedback.feedback}</p>
-              <p className="text-sm text-gray-500">
-                Status: {feedback.resolved ? "Resolved " : "Unresolved "}
-                {feedback.timestamp?.toDate().toLocaleString() || "No timestamp"}
-              </p>
-              <div className="mt-2 flex gap-4 flex-wrap">
-                <button
-                  onClick={() => handleDeleteFeedback(feedback.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => handleMarkAsResolved(feedback.id)}
-                  className="text-blue-600 hover:underline"
-                >
-                  Mark as Resolved
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
 }
