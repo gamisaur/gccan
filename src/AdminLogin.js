@@ -22,7 +22,7 @@ export default function AdminLogin({ onLogin, onBack }) {
       const userCredential = await signInWithEmailAndPassword(auth, loginEmail, password);
       onLogin(userCredential.user);
     } catch (err) {
-      setError("Invalid email or password");
+      setError("Invalid credentials or password");
     } finally {
       setLoading(false);
     }
