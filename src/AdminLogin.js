@@ -49,13 +49,13 @@ export default function AdminLogin({ onLogin, onBack }) {
           }}
         >
           <label htmlFor="email" className="block mb-1 font-medium">
-            Email or Student ID
+            Email or UID
           </label>
           <input
             id="email"
             type="text"
             autoFocus
-            placeholder="Email or Student ID (e.g. 202312250)"
+            placeholder="Email or UID (e.g. 202312250)"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={`w-full p-2 mb-3 border rounded focus:outline-none focus:ring-2 focus:ring-green-400 ${
