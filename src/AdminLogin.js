@@ -15,7 +15,11 @@ export default function AdminLogin({ onLogin, onBack }) {
     try {
       const auth = getAuth();
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      let loginEmail = email.trim();
+      if (loginEmail && !loginEmail.includes("@")) {
+        loginEmail = `${loginEmail}@gordoncollege.edu.ph`;
+      }
+      const userCredential = await signInWithEmailAndPassword(auth, loginEmail, password);
       onLogin(userCredential.user);
     } catch (err) {
       setError("Invalid email or password");
@@ -26,7 +30,7 @@ export default function AdminLogin({ onLogin, onBack }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-green-100 px-2">
-      <div className="bg-white p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-md">
+      <div className="bg-white p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-xs sm:max-w-md">
         <div className="flex justify-center mb-4 flex-col items-center sm:flex-row sm:items-center">
           <img
             src="/GC logo.png"
@@ -45,13 +49,13 @@ export default function AdminLogin({ onLogin, onBack }) {
           }}
         >
           <label htmlFor="email" className="block mb-1 font-medium">
-            Email
+            Email or Student ID
           </label>
           <input
             id="email"
-            type="email"
+            type="text"
             autoFocus
-            placeholder="Email"
+            placeholder="Email or Student ID (e.g. 202312250)"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={`w-full p-2 mb-3 border rounded focus:outline-none focus:ring-2 focus:ring-green-400 ${

@@ -15,7 +15,7 @@ import { ref, onValue, push, remove, update as rtdbUpdate } from "firebase/datab
 import defaultAvatar from "./default-avatar.png";
 import Cropper from "react-easy-crop";
 import getCroppedImg from "./utils/cropImage";
-import emailjs from "@emailjs/browser"; // Add this import at the top
+import emailjs from "@emailjs/browser"; 
 
 export default function AdminDashboard({ user, onLogout }) {
   const [uploading, setUploading] = useState(false);
@@ -324,16 +324,16 @@ export default function AdminDashboard({ user, onLogout }) {
     if (!reply || !reply.trim()) return;
 
     try {
-      // Send email using EmailJS (configure your service, template, and user IDs)
+      // Send email using EmailJS
       await emailjs.send(
-        "service_a5ne3r5", // replace with your EmailJS service ID
-        "template_x4g277a", // replace with your EmailJS template ID
+        "service_a5ne3r5", // replace with EmailJS service ID
+        "template_x4g277a", // replace with EmailJS template ID
         {
           to_email: feedback.email,
           message: reply,
           question: feedback.feedback,
         },
-        "2BElq4KD701yuD4aC" // replace with your EmailJS public key
+        "2BElq4KD701yuD4aC" // replace with EmailJS public key
       );
 
       // Mark as resolved in the database

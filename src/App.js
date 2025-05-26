@@ -32,7 +32,11 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthLoading(false);
-      if (firebaseUser && firebaseUser.email === "admin@gccan.com") {
+      if (
+        firebaseUser &&
+        firebaseUser.email &&
+        firebaseUser.email.endsWith("@gordoncollege.edu.ph")
+      ) {
         setIsAdmin(true);
         setView("admin");
       } else {

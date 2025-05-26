@@ -40,3 +40,10 @@
     transform: rotate(360deg);
   }
 }
+
+#registrar {
+  stroke: #eab308;
+  stroke-width: 5;
+  fill: #fef08a !important;
+  filter: drop-shadow(0 0 8px #eab308);
+}
