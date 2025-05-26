@@ -14,7 +14,6 @@ export default function AdminLogin({ onLogin, onBack }) {
     setLoading(true);
     try {
       const auth = getAuth();
-      // Set persistence based on "Remember Me"
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       onLogin(userCredential.user);
@@ -28,7 +27,6 @@ export default function AdminLogin({ onLogin, onBack }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-green-100 px-2">
       <div className="bg-white p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-md">
-        {/* Logo or branding */}
         <div className="flex justify-center mb-4 flex-col items-center sm:flex-row sm:items-center">
           <img
             src="/GC logo.png"
@@ -85,7 +83,6 @@ export default function AdminLogin({ onLogin, onBack }) {
               tabIndex={0}
             >
               {showPassword ? (
-                // Eye Off Icon (Hide password)
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -101,7 +98,6 @@ export default function AdminLogin({ onLogin, onBack }) {
                   />
                 </svg>
               ) : (
-                // Eye Icon (Show password)
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -121,12 +117,10 @@ export default function AdminLogin({ onLogin, onBack }) {
               )}
             </button>
           </div>
-          {/* Password requirements */}
           <div className="text-xs text-gray-500 mb-3 ml-1">
             Password must be at least 6 characters.
           </div>
 
-          {/* Remember Me */}
           <div className="flex items-center mb-4">
             <input
               id="rememberMe"

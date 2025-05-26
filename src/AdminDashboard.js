@@ -15,31 +15,26 @@ import { ref, onValue, push, remove, update as rtdbUpdate } from "firebase/datab
 import defaultAvatar from "./default-avatar.png";
 import Cropper from "react-easy-crop";
 import getCroppedImg from "./utils/cropImage";
+import emailjs from "@emailjs/browser"; // Add this import at the top
 
 export default function AdminDashboard({ user, onLogout }) {
-  // Cloudinary/photo states
   const [uploading, setUploading] = useState(false);
-  const [photoURL, setPhotoURL] = useState(""); // Always set from Firestore
+  const [photoURL, setPhotoURL] = useState("");
   const [photoLoading, setPhotoLoading] = useState(true);
 
-  // Cropper states
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [showCropper, setShowCropper] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // Sidebar menu
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
 
-  // View state
   const [view, setView] = useState("feedback");
 
-  // FAQ states
   const [faqs, setFaqs] = useState([]);
   const [faqFormData, setFaqFormData] = useState({ category: "", question: "", answer: "" });
 
-  // Faculty Schedule states
   const [schedules, setSchedules] = useState([]);
   const [scheduleFormData, setScheduleFormData] = useState({
     facultyEmail: "",
@@ -52,25 +47,18 @@ export default function AdminDashboard({ user, onLogout }) {
     time: "",
   });
 
-  // Feedback states (Realtime Database)
   const [feedbackList, setFeedbackList] = useState([]);
   const [notification, setNotification] = useState("");
   const prevFeedbackCount = useRef(0);
-
-  // Admin name state
   const [adminName, setAdminName] = useState("Admin");
-
-  // Sidebar open/close state (for mobile)
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Fetch FAQs
   const fetchFAQs = async () => {
     const snapshot = await getDocs(collection(db, "FAQs"));
     const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     setFaqs(data);
   };
 
-  // Fetch Faculty Schedules
   const fetchSchedules = async () => {
     const facultySchedulesSnapshot = await getDocs(collection(db, "FacultySchedules"));
     const schedulesData = [];
@@ -93,7 +81,6 @@ export default function AdminDashboard({ user, onLogout }) {
     setSchedules(schedulesData);
   };
 
-  // Fetch Feedbacks (Realtime Database, real-time listener)
   useEffect(() => {
     fetchFAQs();
     fetchSchedules();
@@ -105,11 +92,9 @@ export default function AdminDashboard({ user, onLogout }) {
         id,
         ...value,
       }));
-      // Sort by timestamp descending (most recent first)
       feedbackArray = feedbackArray.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       setFeedbackList(feedbackArray);
 
-      // Notification logic
       if (prevFeedbackCount.current !== 0 && feedbackArray.length > prevFeedbackCount.current) {
         setNotification("New feedback received!");
         setTimeout(() => setNotification(""), 4000);
@@ -118,10 +103,8 @@ export default function AdminDashboard({ user, onLogout }) {
     });
 
     return () => unsubscribe();
-    // eslint-disable-next-line
   }, []);
 
-  // Fetch admin photoURL on mount and when user changes
   useEffect(() => {
     async function fetchAdminPhoto() {
       setPhotoLoading(true);
@@ -131,11 +114,11 @@ export default function AdminDashboard({ user, onLogout }) {
           if (adminDoc.exists()) {
             const adminData = adminDoc.data();
             setPhotoURL(adminData.photoURL || "");
-            setAdminName(adminData.displayName || "Admin"); // Set admin name from Firestore
+            setAdminName(adminData.displayName || "Admin");
             console.log("Fetched admin photoURL from Firestore:", adminData.photoURL);
           } else {
             setPhotoURL("");
-            setAdminName("Admin"); // Reset to default if no admin doc
+            setAdminName("Admin");
             console.log("No admin doc found for this user.");
           }
         }
@@ -149,7 +132,6 @@ export default function AdminDashboard({ user, onLogout }) {
     fetchAdminPhoto();
   }, [user]);
 
-  // Cloudinary Upload Handler (accepts File, not event)
   const handleImageUpload = async (file) => {
     if (!file) return;
     setUploading(true);
@@ -172,7 +154,6 @@ export default function AdminDashboard({ user, onLogout }) {
         throw new Error("Cloudinary upload failed");
       }
 
-      // Debug: Log user and URL
       console.log("User for Firestore:", user);
       console.log("Cloudinary URL:", data.secure_url);
 
@@ -198,7 +179,6 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // FAQ handlers
   const handleAddFAQ = async () => {
     if (!faqFormData.category || !faqFormData.question || !faqFormData.answer) return;
 
@@ -229,7 +209,6 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // Schedule handlers
   const handleAddSchedule = async () => {
     const {
       facultyEmail,
@@ -252,7 +231,6 @@ export default function AdminDashboard({ user, onLogout }) {
     );
     if (!confirmed) return;
 
-    // Create or update faculty document
     const facultyDocRef = doc(db, "FacultySchedules", facultyEmail);
     try {
       await setDoc(facultyDocRef, { facultyEmail, facultyName }, { merge: true });
@@ -260,7 +238,6 @@ export default function AdminDashboard({ user, onLogout }) {
       console.error("Error creating/updating faculty document:", error);
     }
 
-    // Add schedule in subjects subcollection
     await addDoc(collection(db, "FacultySchedules", facultyEmail, "subjects"), {
       courseCode,
       classCode,
@@ -291,7 +268,6 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // Update classType manually with success prompt
   const handleChangeClassType = async (facultyId, scheduleId, newClassType) => {
     try {
       await updateDoc(doc(db, "FacultySchedules", facultyId, "subjects", scheduleId), {
@@ -313,9 +289,6 @@ export default function AdminDashboard({ user, onLogout }) {
     onLogout();
   };
 
-  // --- FEEDBACK HANDLERS (Realtime Database) ---
-
-  // Add Feedback (example usage, call this from your feedback form)
   const handleAddFeedback = async ({ email, feedback }) => {
     const feedbackRef = ref(rtdb, "feedbacks");
     await push(feedbackRef, {
@@ -326,7 +299,6 @@ export default function AdminDashboard({ user, onLogout }) {
     });
   };
 
-  // Delete Feedback
   const handleDeleteFeedback = async (id) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this feedback message?");
     if (confirmDelete) {
@@ -335,7 +307,6 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // Mark as Resolved
   const handleMarkAsResolved = async (id) => {
     try {
       const confirmResolve = window.confirm("Are you sure you want to mark this feedback as resolved?");
@@ -348,7 +319,34 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // Check if user is admin
+  const handleReplyFeedback = async (feedback) => {
+    const reply = prompt(`Reply to ${feedback.email}:\n\n${feedback.feedback}\n\nType your reply below:`);
+    if (!reply || !reply.trim()) return;
+
+    try {
+      // Send email using EmailJS (configure your service, template, and user IDs)
+      await emailjs.send(
+        "service_a5ne3r5", // replace with your EmailJS service ID
+        "template_x4g277a", // replace with your EmailJS template ID
+        {
+          to_email: feedback.email,
+          message: reply,
+          question: feedback.feedback,
+        },
+        "2BElq4KD701yuD4aC" // replace with your EmailJS public key
+      );
+
+      // Mark as resolved in the database
+      const feedbackRef = ref(rtdb, `feedbacks/${feedback.id}`);
+      await rtdbUpdate(feedbackRef, { resolved: true });
+
+      alert("Reply sent and marked as resolved!");
+    } catch (error) {
+      alert("Failed to send reply. Please check your email service configuration.");
+      console.error(error);
+    }
+  };
+
   const checkIfAdmin = async (user) => {
     if (!user) return false;
     const adminDoc = await getDoc(doc(db, "admins", user.uid));
@@ -385,7 +383,7 @@ export default function AdminDashboard({ user, onLogout }) {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0 relative">
           <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
         </div>
-        {/* Arrow toggle button - only on mobile, at the edge of the screen, below the heading */}
+        {/* Arrow toggle button - only on mobile */}
         {!sidebarOpen && (
           <button
             className="fixed left-0 z-50 bg-white border border-gray-300 shadow p-1 rounded-none flex items-center justify-center transition sm:hidden"
@@ -393,7 +391,7 @@ export default function AdminDashboard({ user, onLogout }) {
               width: "32px",
               height: "32px",
               borderRadius: 0,
-              top: "50px", // Adjust this value if you want it closer/farther from the top
+              top: "50px",
             }}
             onClick={() => setSidebarOpen((open) => !open)}
             aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
@@ -404,7 +402,6 @@ export default function AdminDashboard({ user, onLogout }) {
           </button>
         )}
 
-        {/* Remove the toggle buttons from here */}
         {/* FAQ Section */}
         {view === "faqs" && (
           <>
@@ -529,39 +526,70 @@ export default function AdminDashboard({ user, onLogout }) {
 
         {/* Feedback Section */}
         {view === "feedback" && (
-          <div className="bg-white p-4 rounded shadow-lg max-w-full overflow-x-auto">
-            <h2 className="text-xl font-semibold mb-4">User Feedback / Questions</h2>
-
-            {feedbackList.length === 0 ? (
-              <p>No feedback submitted yet.</p>
-            ) : (
-              feedbackList.map((feedback) => (
-                <div key={feedback.id} className="border-b py-3">
-                  <p><strong>Email:</strong> {feedback.email}</p>
-                  <p><strong>Message:</strong> {feedback.feedback}</p>
-                  <p className="text-sm text-gray-500">
-                    Status: {feedback.resolved ? "Resolved " : "Unresolved "}
-                    {feedback.timestamp
-                      ? new Date(feedback.timestamp).toLocaleString()
-                      : "No timestamp"}
-                  </p>
-                  <div className="mt-2 flex gap-4 flex-wrap">
-                    <button
-                      onClick={() => handleDeleteFeedback(feedback.id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => handleMarkAsResolved(feedback.id)}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Mark as Resolved
-                    </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Unresolved Feedback Card */}
+            <div className="bg-white p-4 rounded shadow-lg max-w-full overflow-x-auto">
+              <h2 className="text-xl font-semibold mb-4 text-green-700">Unresolved Feedback / Questions</h2>
+              {feedbackList.filter(fb => !fb.resolved).length === 0 ? (
+                <p className="mb-4">No unresolved feedback submitted yet.</p>
+              ) : (
+                feedbackList.filter(fb => !fb.resolved).map((feedback) => (
+                  <div key={feedback.id} className="border-b py-3">
+                    <p><strong>Email:</strong> {feedback.email}</p>
+                    <p><strong>Message:</strong> {feedback.feedback}</p>
+                    <p className="text-sm text-gray-500">
+                      Status: Unresolved{" "}
+                      {feedback.timestamp
+                        ? new Date(feedback.timestamp).toLocaleString()
+                        : "No timestamp"}
+                    </p>
+                    <div className="mt-2 flex gap-4 flex-wrap">
+                      <button
+                        onClick={() => handleDeleteFeedback(feedback.id)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => handleReplyFeedback(feedback)}
+                        className="text-green-600 hover:underline"
+                      >
+                        Reply
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
+
+            {/* Resolved Feedback Card */}
+            <div className="bg-white p-4 rounded shadow-lg max-w-full overflow-x-auto">
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Resolved Feedback / Questions</h2>
+              {feedbackList.filter(fb => fb.resolved).length === 0 ? (
+                <p>No resolved feedback yet.</p>
+              ) : (
+                feedbackList.filter(fb => fb.resolved).map((feedback) => (
+                  <div key={feedback.id} className="border-b py-3 opacity-80">
+                    <p><strong>Email:</strong> {feedback.email}</p>
+                    <p><strong>Message:</strong> {feedback.feedback}</p>
+                    <p className="text-sm text-gray-500">
+                      Status: Resolved{" "}
+                      {feedback.timestamp
+                        ? new Date(feedback.timestamp).toLocaleString()
+                        : "No timestamp"}
+                    </p>
+                    <div className="mt-2 flex gap-4 flex-wrap">
+                      <button
+                        onClick={() => handleDeleteFeedback(feedback.id)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -608,7 +636,7 @@ export default function AdminDashboard({ user, onLogout }) {
         )}
       </main>
 
-      {/* Sidebar: Drawer on mobile, static on desktop (right side) */}
+      {/* Sidebar: Drawer on mobile, static on desktop */}
       <aside
         className={`
           fixed z-30 top-0 h-full w-64 bg-white shadow-lg flex flex-col items-center py-8 px-4
@@ -642,7 +670,6 @@ export default function AdminDashboard({ user, onLogout }) {
               }}
             />
           )}
-          {/* Show the + icon only if there is no uploaded photo */}
           {!photoLoading && (!photoURL || photoURL === defaultAvatar) && (
             <label className="absolute bottom-2 right-2 bg-green-500 rounded-full p-1 cursor-pointer hover:bg-green-600 shadow-lg transition">
               <input
@@ -662,7 +689,6 @@ export default function AdminDashboard({ user, onLogout }) {
                 }}
                 disabled={uploading || !user}
               />
-              {/* Plus icon */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="w-6 h-6 text-white"
@@ -795,15 +821,14 @@ export default function AdminDashboard({ user, onLogout }) {
   );
 }
 
-// Add this helper component above your main export:
 function SidebarButton({ icon, label, active, onClick }) {
   return (
     <button
       onClick={onClick}
       className={`flex items-center px-4 py-2 w-full text-left transition
         ${active ? "bg-green-100 border-l-4 border-green-500 text-green-700 font-semibold" : "hover:bg-gray-100"}
-        rounded-none`} // <-- sharp edges
-      style={{ borderRadius: "0" }} // <-- sharp edges
+        rounded-none`}
+      style={{ borderRadius: "0" }}
     >
       {icon}
       {label}
