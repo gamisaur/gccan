@@ -59,13 +59,19 @@ export default function App() {
 
   const handleClick = (question, answer) => {
     setShowAvailability(false);
-    const linkedAnswer = linkify(answer);
+    
+    const displayAnswer = linkify(answer.text);  // Use answer.text instead of raw answer
+    
     setMessages((prev) => [
       ...prev,
       { type: "user", text: question },
-      { type: "bot", text: linkedAnswer },
+      { 
+        type: "bot", 
+        text: displayAnswer,
+        videoUrl: answer.videoUrl  // Use the videoUrl from the database
+      },
     ]);
-    speakText(linkedAnswer);
+    speakText(displayAnswer);
   };
 
   const handleCheckAvailability = async () => {
@@ -120,9 +126,12 @@ export default function App() {
     const snapshot = await getDocs(collection(db, "FAQs"));
     const data = {};
     snapshot.forEach((doc) => {
-      const { question, answer, category } = doc.data();
+      const { question, answer, category, videoUrl } = doc.data();  // Add videoUrl
       if (!data[category]) data[category] = {};
-      data[category][question] = answer;
+      data[category][question] = {
+        text: answer,
+        videoUrl: videoUrl || null  // Store video URL separately
+      };
     });
     setFaqs(data);
   };
@@ -311,10 +320,10 @@ export default function App() {
 
                 {selectedCategory === category && (
                   <div className="mt-2">
-                    {Object.entries(faqs[category]).map(([question, answer]) => (
+                    {Object.entries(faqs[category]).map(([question, answerObj]) => (
                       <div key={question} className="mb-2">
                         <button
-                          onClick={() => handleClick(question, answer)}
+                          onClick={() => handleClick(question, answerObj)}  // Pass the whole answer object
                           className="text-left w-full px-2 py-1 rounded bg-green-200 hover:bg-green-300"
                         >
                           {question}
@@ -429,11 +438,54 @@ export default function App() {
               <div
                 key={index}
                 ref={index === messages.length - 1 ? messageRef : null}
-                className={`p-2 my-1 rounded-lg max-w-xs break-words whitespace-pre-line ${msg.type === "user" ? "bg-green-200 ml-auto text-right" : "bg-gray-200"}`}
+                className={`p-2 my-1 rounded-lg max-w-xs md:max-w-2xl break-words whitespace-pre-line ${
+                  msg.type === "user" ? "bg-green-200 ml-auto text-right" : "bg-gray-200"
+                }`}
               >
                 <strong>{msg.type === "user" ? "You" : "GCCAN"}:</strong>{" "}
                 {msg.type === "bot" ? (
-                  <span className="break-words whitespace-pre-line" dangerouslySetInnerHTML={{ __html: msg.text }} />
+                  <div className="w-full">
+                    <span 
+                      className="break-words whitespace-pre-line" 
+                      dangerouslySetInnerHTML={{ __html: msg.text }} 
+                    />
+                    {msg.videoUrl && (
+                      <div className="mt-4 bg-white rounded-lg p-4 shadow-md">
+                        <h3 className="text-lg font-semibold mb-2">Video Content</h3>
+                        <div className="relative w-full pb-[56.25%]">
+                          <iframe
+                            src={msg.videoUrl}
+                            className="absolute top-0 left-0 w-full h-full rounded-lg"
+                            frameBorder="0"
+                            allowFullScreen
+                            allow="autoplay; encrypted-media"
+                          ></iframe>
+                        </div>
+                        <div className="mt-3 flex justify-between items-center">
+                          <a 
+                            href={msg.videoUrl.replace('/preview', '/view')} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            Open in Google Drive
+                          </a>
+                          <button 
+                            onClick={() => window.open(msg.videoUrl, '_blank')}
+                            className="text-green-500 hover:text-green-700 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   msg.text
                 )}
