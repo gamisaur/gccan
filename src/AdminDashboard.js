@@ -326,14 +326,14 @@ export default function AdminDashboard({ user, onLogout }) {
     try {
       // Send email using EmailJS
       await emailjs.send(
-        "service_a5ne3r5", // replace with EmailJS service ID
-        "template_x4g277a", // replace with EmailJS template ID
+        "service_a5ne3r5", 
+        "template_x4g277a",
         {
           to_email: feedback.email,
           message: reply,
           question: feedback.feedback,
         },
-        "2BElq4KD701yuD4aC" // replace with EmailJS public key
+        "2BElq4KD701yuD4aC"
       );
 
       // Mark as resolved in the database

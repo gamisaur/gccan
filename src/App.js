@@ -13,7 +13,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [faqs, setFaqs] = useState({});
   const [ttsEnabled, setTtsEnabled] = useState(false);
-  const [user, setUser] = useState(null); // Store the Firebase user object
+  const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [view, setView] = useState("user");
   const [authLoading, setAuthLoading] = useState(true);
@@ -26,8 +26,8 @@ export default function App() {
   const [selectedFaculty, setSelectedFaculty] = useState("");
   const [facultySchedule, setFacultySchedule] = useState([]);
   const [showAvailability, setShowAvailability] = useState(false);
-  const [showTerms, setShowTerms] = useState(false); // New state for terms and conditions
-  const [hasAgreed, setHasAgreed] = useState(false); // New state for tracking agreement
+  const [showTerms, setShowTerms] = useState(false);
+  const [hasAgreed, setHasAgreed] = useState(false);
 
   useEffect(() => {
     const auth = getAuth();
@@ -62,7 +62,7 @@ export default function App() {
   const handleClick = (question, answer) => {
     setShowAvailability(false);
     
-    const displayAnswer = linkify(answer.text);  // Use answer.text instead of raw answer
+    const displayAnswer = linkify(answer.text);
     
     setMessages((prev) => [
       ...prev,
@@ -70,7 +70,7 @@ export default function App() {
       { 
         type: "bot", 
         text: displayAnswer,
-        videoUrl: answer.videoUrl  // Use the videoUrl from the database
+        videoUrl: answer.videoUrl 
       },
     ]);
     speakText(displayAnswer);
@@ -128,11 +128,11 @@ export default function App() {
     const snapshot = await getDocs(collection(db, "FAQs"));
     const data = {};
     snapshot.forEach((doc) => {
-      const { question, answer, category, videoUrl } = doc.data();  // Add videoUrl
+      const { question, answer, category, videoUrl } = doc.data();
       if (!data[category]) data[category] = {};
       data[category][question] = {
         text: answer,
-        videoUrl: videoUrl || null  // Store video URL separately
+        videoUrl: videoUrl || null
       };
     });
     setFaqs(data);
@@ -206,7 +206,7 @@ export default function App() {
         className="min-h-screen flex flex-col justify-between bg-blue-100 bg-cover bg-center"
         style={{ backgroundImage: "url('/homeBG.jpg')" }}
       >
-        <div className="flex flex-col items-center px-4 py-6 space-y-8">
+        <div className="flex flex-col items-center px-4 py-6">
           <div className="flex flex-col sm:flex-row gap-8 sm:mt-40 mt-32 px-5">
             <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
               <img
@@ -248,8 +248,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Terms and Conditions Checkbox Section */}
-          <div className="mt-4 flex justify-center items-center">
+          {/* Terms and Conditions Section*/}
+          <div className="mt-4 mb-20 sm:mb-4">
             <label className="flex items-center space-x-2 cursor-pointer">
               <input
                 type="checkbox"
