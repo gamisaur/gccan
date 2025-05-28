@@ -26,6 +26,8 @@ export default function App() {
   const [selectedFaculty, setSelectedFaculty] = useState("");
   const [facultySchedule, setFacultySchedule] = useState([]);
   const [showAvailability, setShowAvailability] = useState(false);
+  const [showTerms, setShowTerms] = useState(false); // New state for terms and conditions
+  const [hasAgreed, setHasAgreed] = useState(false); // New state for tracking agreement
 
   useEffect(() => {
     const auth = getAuth();
@@ -217,19 +219,25 @@ export default function App() {
                 Gordon College Chatbot Assistant & Navigation
               </p>
               <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 mt-6 mb-4 justify-center items-center">
-              <button
-                className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-700"
-                onClick={() => setStarted(true)}
-              >
-                Get Started
-              </button>
-              <button
-                className="px-5 py-2 bg-green-500 text-white rounded-lg hover:bg-green-700"
-                onClick={() => setView("admin")}
-              >
-                Admin Login
-              </button>
-            </div>
+                <button
+                  className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-700"
+                  onClick={() => {
+                    if (!hasAgreed) {
+                      alert("Please agree to the Terms and Conditions first before proceeding.");
+                      return;
+                    }
+                    setStarted(true);
+                  }}
+                >
+                  Get Started
+                </button>
+                <button
+                  className="px-5 py-2 bg-green-500 text-white rounded-lg hover:bg-green-700"
+                  onClick={() => setView("admin")}
+                >
+                  Admin Login
+                </button>
+              </div>
             </div>
 
             <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
@@ -240,6 +248,32 @@ export default function App() {
             </div>
           </div>
 
+          {/* Terms and Conditions Checkbox Section */}
+          <div className="mt-4 flex justify-center items-center">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-green-500"
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setShowTerms(true);
+                  }
+                  setHasAgreed(e.target.checked);
+                }}
+                checked={hasAgreed}
+              />
+              <span className="text-white">
+                I agree to the{" "}
+                <button
+                  onClick={() => setShowTerms(true)}
+                  className="text-green-400 hover:text-green-300 underline"
+                >
+                  Terms & Conditions
+                </button>
+              </span>
+            </label>
+          </div>
+
           <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md py-1 text-center text-sm text-white">
             <p>
               ✉️ Email us at{" "}
@@ -247,6 +281,90 @@ export default function App() {
             </p>
           </div>
         </div>
+
+        {/* Add the Terms Modal */}
+        {showTerms && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-gray-800">Terms and Conditions</h2>
+                <button
+                  onClick={() => setShowTerms(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="prose prose-sm max-w-none">
+                <p className="text-sm text-gray-600 mb-4">Effective Date: May 28, 2025</p>
+      
+                <div className="space-y-4">
+                  <section>
+                    <h3 className="text-lg font-semibold">1. Acceptance of Terms</h3>
+                    <p>By using this web application, you agree to comply with and be bound by these terms. If you do not agree with any part of these terms, please discontinue use immediately.</p>
+                  </section>
+      
+                  <section>
+                    <h3 className="text-lg font-semibold">2. Purpose of the Application</h3>
+                    <p>GCCAN is intended to:</p>
+                    <ul className="list-disc pl-5">
+                      <li>Provide automated responses to frequently asked questions (FAQs)</li>
+                      <li>Assist users in navigating campus services such as enrollment, scheduling, and facilities</li>
+                      <li>Collect feedback and suggestions to improve user experience</li>
+                    </ul>
+                  </section>
+      
+                  <section>
+                    <h3 className="text-lg font-semibold">3. User Responsibilities</h3>
+                    <p>As a user of this application, you agree to:</p>
+                    <ul className="list-disc pl-5">
+                      <li>Use the application only for educational and informational purposes</li>
+                      <li>Provide accurate and respectful input when submitting feedback or questions</li>
+                      <li>Refrain from misusing or disrupting the system</li>
+                    </ul>
+                  </section>
+      
+                  <section>
+                    <h3 className="text-lg font-semibold">4. Data Collection and Privacy</h3>
+                    <p>GCCAN collects the following user data:</p>
+                    <ul className="list-disc pl-5">
+                      <li>Email address</li>
+                      <li>Feedback or questions</li>
+                      <li>Timestamp of submission</li>
+                    </ul>
+                    <p>All collected data is stored securely using Google Firebase services and is only used to improve the system and respond to user needs.</p>
+                  </section>
+      
+                  <section>
+                    <h3 className="text-lg font-semibold">5. Contact</h3>
+                    <p>For inquiries or concerns about these terms, contact:</p>
+                    <p className="font-medium">📧 info@gordoncollege.edu.ph</p>
+                  </section>
+                </div>
+      
+                <div className="mt-6 pt-4 border-t flex justify-end gap-4">
+                  <button
+                    onClick={() => setShowTerms(false)}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowTerms(false);
+                      setHasAgreed(true);
+                    }}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    Accept & Continue
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
