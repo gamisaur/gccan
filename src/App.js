@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
@@ -6,6 +6,7 @@ import AdminLogin from "./AdminLogin";
 import AdminDashboard from "./AdminDashboard";
 import { ref as dbRef, push as dbPush } from "firebase/database";
 import { rtdb } from "./firebase";
+import qrcode from 'qrcode-generator';
 
 export default function App() {
   const [started, setStarted] = useState(false);
@@ -28,6 +29,11 @@ export default function App() {
   const [showAvailability, setShowAvailability] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [hasAgreed, setHasAgreed] = useState(false);
+  const [welcomeQrNode, setWelcomeQrNode] = useState(null);
+
+  const welcomeQrRef = useCallback(node => {
+    setWelcomeQrNode(node);
+  }, []);
 
   useEffect(() => {
     const auth = getAuth();
@@ -171,6 +177,16 @@ export default function App() {
     }
   }, [messages, ttsEnabled]);
 
+  useEffect(() => {
+    if (!started && welcomeQrNode) {
+      welcomeQrNode.innerHTML = '';
+      const welcomeQr = qrcode(0, 'M');
+      welcomeQr.addData('https://gccan.vercel.app');
+      welcomeQr.make();
+      welcomeQrNode.innerHTML = welcomeQr.createImgTag(3, 4);
+    }
+  }, [started, welcomeQrNode]);
+
   if (authLoading) {
     return <div>Loading...</div>;
   }
@@ -208,6 +224,21 @@ export default function App() {
       >
         <div className="flex flex-col items-center px-4 py-6">
           <div className="flex flex-col sm:flex-row gap-8 sm:mt-40 mt-32 px-5">
+            {/* QR Code Card - Left */}
+            <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
+              <h2 className="text-2xl font-bold mb-4">Quick Access</h2>
+              <p className="text-white-700 mb-4">
+                Scan the QR code below to quickly access GCCAN on your mobile device
+              </p>
+              <div className="bg-white rounded-lg p-4 inline-block">
+                <div ref={welcomeQrRef} className="mx-auto"></div>
+              </div>
+              <p className="text-sm text-white-600 mt-2">
+                Point your camera at the QR code
+              </p>
+            </div>
+
+            {/* Welcome Card - Middle */}
             <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
               <img
                 src="/GC logo.png"
@@ -240,6 +271,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* About Card - Right */}
             <div className="p-10 bg-white/10 backdrop-blur-md rounded-lg shadow-lg text-center w-full max-w-md text-white">
               <h2 className="text-2xl font-bold mb-4">About GCCAN</h2>
               <p className="text-white-700">
@@ -303,16 +335,16 @@ export default function App() {
                 <div className="space-y-4">
                   <section>
                     <h3 className="text-lg font-semibold">1. Acceptance of Terms</h3>
-                    <p>By using this web application, you agree to comply with and be bound by these terms. If you do not agree with any part of these terms, please discontinue use immediately.</p>
+                    <p>By using this web application, you agree to comply with and be bound by these terms. If you do not agree with any part of these terms, please do not continue use immediately.</p>
                   </section>
       
                   <section>
                     <h3 className="text-lg font-semibold">2. Purpose of the Application</h3>
                     <p>GCCAN is intended to:</p>
                     <ul className="list-disc pl-5">
-                      <li>Provide automated responses to frequently asked questions (FAQs)</li>
-                      <li>Assist users in navigating campus services such as enrollment, scheduling, and facilities</li>
-                      <li>Collect feedback and suggestions to improve user experience</li>
+                      <li>Provide automated responses to frequently asked questions (FAQs).</li>
+                      <li>Assist users in navigating campus services such as enrollment, scheduling, and facilities.</li>
+                      <li>Collect feedback and suggestions to improve user experience.</li>
                     </ul>
                   </section>
       
@@ -320,9 +352,9 @@ export default function App() {
                     <h3 className="text-lg font-semibold">3. User Responsibilities</h3>
                     <p>As a user of this application, you agree to:</p>
                     <ul className="list-disc pl-5">
-                      <li>Use the application only for educational and informational purposes</li>
-                      <li>Provide accurate and respectful input when submitting feedback or questions</li>
-                      <li>Refrain from misusing or disrupting the system</li>
+                      <li>Use the application only for educational and informational purposes.</li>
+                      <li>Provide accurate and respectful input when submitting feedback or questions.</li>
+                      <li>Avoid abusing or interfering with the system.</li>
                     </ul>
                   </section>
       
@@ -334,6 +366,7 @@ export default function App() {
                       <li>Feedback or questions</li>
                       <li>Timestamp of submission</li>
                     </ul>
+                    <br></br>
                     <p>All collected data is stored securely using Google Firebase services and is only used to improve the system and respond to user needs.</p>
                   </section>
       
